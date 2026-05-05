@@ -25,7 +25,7 @@ class AnkiRepository(private val context: Context) {
     }
 
     fun isApiAvailable(): Boolean {
-        return api.isAnkiDroidInstalled()
+        return AddContentApi.getAnkiDroidPackageName(context) != null
     }
 
     fun getDeckList(): List<Deck> {
