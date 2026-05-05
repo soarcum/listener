@@ -120,7 +120,7 @@ class ReviewViewModel(
 
     private fun answerCard(ease: Int) {
         currentCard?.let {
-            repository.answerCard(it.id, ease)
+            repository.answerCard(it, ease)
             nextCard()
         }
     }
