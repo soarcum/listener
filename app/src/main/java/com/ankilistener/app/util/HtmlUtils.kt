@@ -8,10 +8,16 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.core.text.HtmlCompat
+import android.text.style.AbsoluteSizeSpan
+import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 
 object HtmlUtils {
 
@@ -51,6 +57,15 @@ object HtmlUtils {
                     }
                     is UnderlineSpan -> addStyle(SpanStyle(textDecoration = TextDecoration.Underline), start, end)
                     is ForegroundColorSpan -> addStyle(SpanStyle(color = Color(span.foregroundColor)), start, end)
+                    is BackgroundColorSpan -> addStyle(SpanStyle(background = Color(span.backgroundColor)), start, end)
+                    is StrikethroughSpan -> addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), start, end)
+                    is AbsoluteSizeSpan -> {
+                        // AbsoluteSizeSpan is in pixels or dip. We'll treat it as sp for simplicity in Compose
+                        addStyle(SpanStyle(fontSize = span.size.sp), start, end)
+                    }
+                    is RelativeSizeSpan -> {
+                        addStyle(SpanStyle(fontSize = span.sizeChange.em), start, end)
+                    }
                 }
             }
         }

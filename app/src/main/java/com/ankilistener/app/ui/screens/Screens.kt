@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -151,7 +153,10 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -159,26 +164,30 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                 if (state == ReviewState.FRONT) {
                     Text(
                         text = parseHtml(it.front).toAnnotatedString(),
-                        fontSize = 32.sp,
+                        fontSize = 24.sp,
                         textAlign = TextAlign.Center,
-                        lineHeight = 40.sp
+                        lineHeight = 32.sp
                     )
                 } else if (state == ReviewState.BACK) {
                     Text(
                         text = parseHtml(it.front).toAnnotatedString(),
-                        fontSize = 20.sp,
+                        fontSize = 16.sp,
                         textAlign = TextAlign.Center,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 22.sp
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Divider(modifier = Modifier.fillMaxWidth(0.8f))
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Divider(
+                        modifier = Modifier.fillMaxWidth(0.6f),
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
                     Text(
                         text = parseHtml(it.back).toAnnotatedString(),
-                        fontSize = 32.sp,
+                        fontSize = 22.sp,
                         textAlign = TextAlign.Center,
-                        lineHeight = 40.sp,
-                        fontWeight = FontWeight.Bold
+                        lineHeight = 30.sp
                     )
                 }
             }
