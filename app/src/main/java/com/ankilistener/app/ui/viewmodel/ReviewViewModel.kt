@@ -1,15 +1,15 @@
-package com.example.ankilistener.ui.viewmodel
+package com.ankilistener.app.ui.viewmodel
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ankilistener.data.AnkiRepository
-import com.example.ankilistener.data.Card
-import com.example.ankilistener.data.Deck
-import com.example.ankilistener.util.HtmlUtils
-import com.example.ankilistener.util.TtsManager
-import com.example.ankilistener.util.VibrateManager
+import com.ankilistener.app.data.AnkiRepository
+import com.ankilistener.app.data.Card
+import com.ankilistener.app.data.Deck
+import com.ankilistener.app.util.HtmlUtils
+import com.ankilistener.app.util.TtsManager
+import com.ankilistener.app.util.VibrateManager
 import kotlinx.coroutines.launch
 
 enum class ReviewState {

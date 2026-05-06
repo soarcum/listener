@@ -1,4 +1,4 @@
-package com.example.ankilistener
+package com.ankilistener.app
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -18,13 +18,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.ankilistener.data.AnkiRepository
-import com.example.ankilistener.ui.screens.DeckSelectionScreen
-import com.example.ankilistener.ui.screens.PermissionScreen
-import com.example.ankilistener.ui.screens.ReviewScreen
-import com.example.ankilistener.ui.viewmodel.ReviewViewModel
-import com.example.ankilistener.util.TtsManager
-import com.example.ankilistener.util.VibrateManager
+import com.ankilistener.app.data.AnkiRepository
+import com.ankilistener.app.ui.screens.DeckSelectionScreen
+import com.ankilistener.app.ui.screens.PermissionScreen
+import com.ankilistener.app.ui.screens.ReviewScreen
+import com.ankilistener.app.ui.viewmodel.ReviewViewModel
+import com.ankilistener.app.util.TtsManager
+import com.ankilistener.app.util.VibrateManager
 
 class MainActivity : ComponentActivity() {
 

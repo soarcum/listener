@@ -1,4 +1,4 @@
-package com.example.ankilistener.util
+package com.ankilistener.app.util
 
 import android.text.Spanned
 import androidx.compose.ui.text.AnnotatedString

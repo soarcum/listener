@@ -1,4 +1,4 @@
-package com.example.ankilistener.ui.screens
+package com.ankilistener.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,10 +17,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ankilistener.ui.viewmodel.ReviewState
-import com.example.ankilistener.ui.viewmodel.ReviewViewModel
-import com.example.ankilistener.util.HtmlUtils.toAnnotatedString
-import com.example.ankilistener.util.HtmlUtils.parseHtml
+import com.ankilistener.app.ui.viewmodel.ReviewState
+import com.ankilistener.app.ui.viewmodel.ReviewViewModel
+import com.ankilistener.app.util.HtmlUtils.toAnnotatedString
+import com.ankilistener.app.util.HtmlUtils.parseHtml
 import kotlin.math.abs
 
 @Composable
@@ -31,13 +31,13 @@ fun PermissionScreen(isInstalled: Boolean, onGrantClick: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = if (!isInstalled) "未安装 AnkiDroid" else "需要授权",
+            text = if (!isInstalled) "未安�?AnkiDroid" else "需要授�?,
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = if (!isInstalled) "请先安装 AnkiDroid 并开启 API 权限。" else "请在弹出框中点击允许，以便读取卡片。",
+            text = if (!isInstalled) "请先安装 AnkiDroid 并开�?API 权限�? else "请在弹出框中点击允许，以便读取卡片�?,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))

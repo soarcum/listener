@@ -1,4 +1,4 @@
-package com.example.ankilistener.data
+package com.ankilistener.app.data
 
 import android.content.ContentResolver
 import android.content.ContentValues

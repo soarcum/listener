@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.ankilistener'
+    namespace 'com.ankilistener.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.ankilistener"
+        applicationId "com.ankilistener.app"
         minSdk 24
         targetSdk 34
         versionCode 1

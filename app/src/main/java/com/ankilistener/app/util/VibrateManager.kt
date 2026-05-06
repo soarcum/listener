@@ -1,4 +1,4 @@
-package com.example.ankilistener.util
+package com.ankilistener.app.util
 
 import android.content.Context
 import android.os.Build
