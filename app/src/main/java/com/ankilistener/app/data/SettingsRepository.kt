@@ -16,6 +16,7 @@ enum class GestureAction {
 }
 
 enum class GestureType {
+    NONE,
     SINGLE_TAP,
     DOUBLE_TAP,
     SWIPE_LEFT,
@@ -25,26 +26,34 @@ enum class GestureType {
 }
 
 class SettingsRepository(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("gestures_prefs", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = context.getSharedPreferences("gestures_prefs_v2", Context.MODE_PRIVATE)
 
-    fun getAction(gestureType: GestureType): GestureAction {
-        val defaultAction = when (gestureType) {
-            GestureType.SINGLE_TAP -> GestureAction.SHOW_ANSWER
-            GestureType.DOUBLE_TAP -> GestureAction.PLAY_TTS
-            GestureType.SWIPE_LEFT -> GestureAction.ANSWER_AGAIN
-            GestureType.SWIPE_RIGHT -> GestureAction.ANSWER_GOOD
-            GestureType.SWIPE_UP -> GestureAction.ANSWER_EASY
-            GestureType.SWIPE_DOWN -> GestureAction.ANSWER_HARD
+    fun getGesture(action: GestureAction): GestureType {
+        val defaultGesture = when (action) {
+            GestureAction.SHOW_ANSWER -> GestureType.SINGLE_TAP
+            GestureAction.PLAY_TTS -> GestureType.DOUBLE_TAP
+            GestureAction.ANSWER_AGAIN -> GestureType.SWIPE_LEFT
+            GestureAction.ANSWER_HARD -> GestureType.SWIPE_DOWN
+            GestureAction.ANSWER_GOOD -> GestureType.SWIPE_RIGHT
+            GestureAction.ANSWER_EASY -> GestureType.SWIPE_UP
+            else -> GestureType.NONE
         }
-        val savedName = prefs.getString(gestureType.name, defaultAction.name) ?: defaultAction.name
+        val savedName = prefs.getString(action.name, defaultGesture.name) ?: defaultGesture.name
         return try {
-            GestureAction.valueOf(savedName)
+            GestureType.valueOf(savedName)
         } catch (e: Exception) {
-            defaultAction
+            defaultGesture
         }
     }
 
-    fun setAction(gestureType: GestureType, action: GestureAction) {
-        prefs.edit().putString(gestureType.name, action.name).apply()
+    fun setGesture(action: GestureAction, gesture: GestureType) {
+        prefs.edit().putString(action.name, gesture.name).apply()
+    }
+    
+    // For backward compatibility or internal lookup
+    fun getAllMappings(): Map<GestureAction, GestureType> {
+        return GestureAction.values().filter { it != GestureAction.NONE }.associateWith { 
+            getGesture(it)
+        }
     }
 }

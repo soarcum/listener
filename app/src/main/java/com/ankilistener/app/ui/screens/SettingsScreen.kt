@@ -23,7 +23,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("手势设置 (v1.1)") },
+                title = { Text("手势设置") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -37,13 +37,13 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            items(GestureType.values()) { gestureType ->
-                val currentAction = mappings[gestureType] ?: GestureAction.NONE
-                GestureSettingItem(
-                    gestureType = gestureType,
-                    currentAction = currentAction,
-                    onActionSelected = { newAction ->
-                        viewModel.updateGestureAction(gestureType, newAction)
+            items(GestureAction.values().filter { it != GestureAction.NONE }) { action ->
+                val currentGesture = mappings[action] ?: GestureType.NONE
+                ActionSettingItem(
+                    action = action,
+                    currentGesture = currentGesture,
+                    onGestureSelected = { newGesture ->
+                        viewModel.updateActionGesture(action, newGesture)
                     }
                 )
                 Divider()
@@ -53,23 +53,15 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-fun GestureSettingItem(
-    gestureType: GestureType,
-    currentAction: GestureAction,
-    onActionSelected: (GestureAction) -> Unit
+fun ActionSettingItem(
+    action: GestureAction,
+    currentGesture: GestureType,
+    onGestureSelected: (GestureType) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    val gestureName = when (gestureType) {
-        GestureType.SINGLE_TAP -> "单击屏幕"
-        GestureType.DOUBLE_TAP -> "双击屏幕"
-        GestureType.SWIPE_LEFT -> "向左滑动"
-        GestureType.SWIPE_RIGHT -> "向右滑动"
-        GestureType.SWIPE_UP -> "向上滑动"
-        GestureType.SWIPE_DOWN -> "向下滑动"
-    }
-
-    val actionName = getActionName(currentAction)
+    val actionName = getActionName(action)
+    val gestureName = getGestureName(currentGesture)
 
     Box(
         modifier = Modifier
@@ -82,19 +74,19 @@ fun GestureSettingItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(gestureName, style = MaterialTheme.typography.bodyLarge)
-            Text(actionName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            Text(actionName, style = MaterialTheme.typography.bodyLarge)
+            Text(gestureName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
 
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            GestureAction.values().forEach { action ->
+            GestureType.values().forEach { gesture ->
                 DropdownMenuItem(
-                    text = { Text(getActionName(action)) },
+                    text = { Text(getGestureName(gesture)) },
                     onClick = {
-                        onActionSelected(action)
+                        onGestureSelected(gesture)
                         expanded = false
                     }
                 )
@@ -103,16 +95,28 @@ fun GestureSettingItem(
     }
 }
 
+private fun getGestureName(gesture: GestureType): String {
+    return when (gesture) {
+        GestureType.NONE -> "无手势"
+        GestureType.SINGLE_TAP -> "单击屏幕"
+        GestureType.DOUBLE_TAP -> "双击屏幕"
+        GestureType.SWIPE_LEFT -> "向左滑动"
+        GestureType.SWIPE_RIGHT -> "向右滑动"
+        GestureType.SWIPE_UP -> "向上滑动"
+        GestureType.SWIPE_DOWN -> "向下滑动"
+    }
+}
+
 private fun getActionName(action: GestureAction): String {
     return when (action) {
-        GestureAction.NONE -> "无动作"
-        GestureAction.SHOW_ANSWER -> "显示答案"
+        GestureAction.NONE -> "无"
+        GestureAction.SHOW_ANSWER -> "显示答案 (正面有效)"
         GestureAction.PLAY_TTS -> "播放发音"
-        GestureAction.ANSWER_AGAIN -> "重来 (1)"
-        GestureAction.ANSWER_HARD -> "困难 (2)"
-        GestureAction.ANSWER_GOOD -> "良好 (3)"
-        GestureAction.ANSWER_EASY -> "简单 (4)"
-        GestureAction.SKIP -> "跳过 (不记录)"
-        GestureAction.MARK -> "标记 (Mark)"
+        GestureAction.ANSWER_AGAIN -> "重来 (背面有效)"
+        GestureAction.ANSWER_HARD -> "困难 (背面有效)"
+        GestureAction.ANSWER_GOOD -> "良好 (背面有效)"
+        GestureAction.ANSWER_EASY -> "简单 (背面有效)"
+        GestureAction.SKIP -> "跳过"
+        GestureAction.MARK -> "标记"
     }
 }

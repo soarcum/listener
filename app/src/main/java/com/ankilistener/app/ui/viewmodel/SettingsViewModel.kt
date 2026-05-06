@@ -11,22 +11,19 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private val _gestureMappings = mutableStateOf<Map<GestureType, GestureAction>>(emptyMap())
-    val gestureMappings: State<Map<GestureType, GestureAction>> = _gestureMappings
+    private val _gestureMappings = mutableStateOf<Map<GestureAction, GestureType>>(emptyMap())
+    val gestureMappings: State<Map<GestureAction, GestureType>> = _gestureMappings
 
     init {
         loadSettings()
     }
 
     private fun loadSettings() {
-        val mappings = GestureType.values().associateWith { gesture ->
-            settingsRepository.getAction(gesture)
-        }
-        _gestureMappings.value = mappings
+        _gestureMappings.value = settingsRepository.getAllMappings()
     }
 
-    fun updateGestureAction(gestureType: GestureType, action: GestureAction) {
-        settingsRepository.setAction(gestureType, action)
+    fun updateActionGesture(action: GestureAction, gesture: GestureType) {
+        settingsRepository.setGesture(action, gesture)
         loadSettings() // refresh state
     }
 }

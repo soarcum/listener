@@ -122,9 +122,28 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     }
 
     private fun handleGesture(gestureType: GestureType) {
-        val action = settingsRepository.getAction(gestureType)
+        val mappings = settingsRepository.getAllMappings()
+        val actionsForGesture = mappings.filter { it.value == gestureType }.keys
         
+        if (actionsForGesture.isEmpty()) return
+
+        // 根据当前状态选择最合适的动作 (互斥逻辑)
+        val action = when (_reviewState.value) {
+            ReviewState.FRONT -> {
+                // 优先执行“显示答案”，其次是通用的 TTS/跳过/标记
+                actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK }
+            }
+            ReviewState.BACK -> {
+                // 优先执行“评分”，其次是通用的 TTS/跳过/标记
+                actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK }
+            }
+            else -> null
+        } ?: return
+
         val gestureName = when (gestureType) {
+            GestureType.NONE -> "无"
             GestureType.SINGLE_TAP -> "单击"
             GestureType.DOUBLE_TAP -> "双击"
             GestureType.SWIPE_LEFT -> "左滑"
@@ -147,6 +166,10 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         
         _gestureFeedback.value = FeedbackEvent("$gestureName ($actionName)")
 
+        executeAction(action)
+    }
+
+    private fun executeAction(action: GestureAction) {
         when (action) {
             GestureAction.NONE -> { /* Do nothing */ }
             GestureAction.SHOW_ANSWER -> {
@@ -170,7 +193,6 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             }
             GestureAction.MARK -> {
                 vibrateManager.vibrateDoubleShort()
-                // 仅做本地记录提示，不真正同步到 Anki
             }
         }
     }
