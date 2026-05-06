@@ -193,24 +193,31 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
             }
         }
 
-        AnimatedVisibility(
-            visible = gestureFeedback != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.Center)
+    var lastFeedbackMessage by remember { mutableStateOf("") }
+    if (gestureFeedback != null) {
+        lastFeedbackMessage = gestureFeedback?.message ?: ""
+    }
+
+    AnimatedVisibility(
+        visible = gestureFeedback != null,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 150.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.medium)
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.medium)
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
-            ) {
-                Text(
-                    text = gestureFeedback?.message ?: "",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Text(
+                text = lastFeedbackMessage,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
+    }
     }
 }
