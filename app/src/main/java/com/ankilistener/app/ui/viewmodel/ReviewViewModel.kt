@@ -7,6 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.ankilistener.app.data.AnkiRepository
 import com.ankilistener.app.data.Card
 import com.ankilistener.app.data.Deck
+import com.ankilistener.app.data.GestureAction
+import com.ankilistener.app.data.GestureType
+import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
@@ -19,7 +22,8 @@ enum class ReviewState {
 class ReviewViewModel(
     private val repository: AnkiRepository,
     private val ttsManager: TtsManager,
-    private val vibrateManager: VibrateManager
+    private val vibrateManager: VibrateManager,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _decks = mutableStateOf<List<Deck>>(emptyList())
@@ -85,36 +89,60 @@ class ReviewViewModel(
 
     // Gesture Actions
     fun onSingleTap() {
-        if (_reviewState.value == ReviewState.FRONT) {
-            showBack()
-        }
+        handleGesture(GestureType.SINGLE_TAP)
     }
 
     fun onDoubleTap() {
-        currentCard?.let {
-            val text = if (_reviewState.value == ReviewState.BACK) it.back else it.front
-            ttsManager.speak(HtmlUtils.extractTtsText(text))
-        }
+        handleGesture(GestureType.DOUBLE_TAP)
     }
 
     fun onSwipeLeft() {
-        if (_reviewState.value == ReviewState.BACK) {
-            answerCard(AnkiRepository.EASE_AGAIN)
-            vibrateManager.vibrateLong()
-        }
+        handleGesture(GestureType.SWIPE_LEFT)
     }
 
     fun onSwipeRight() {
-        if (_reviewState.value == ReviewState.BACK) {
-            answerCard(AnkiRepository.EASE_GOOD)
-            vibrateManager.vibrateDoubleShort()
-        }
+        handleGesture(GestureType.SWIPE_RIGHT)
     }
 
     fun onSwipeDown() {
+        handleGesture(GestureType.SWIPE_DOWN)
+    }
+    
+    fun onSwipeUp() {
+        handleGesture(GestureType.SWIPE_UP)
+    }
+
+    private fun handleGesture(gestureType: GestureType) {
+        val action = settingsRepository.getAction(gestureType)
+        when (action) {
+            GestureAction.NONE -> { /* Do nothing */ }
+            GestureAction.SHOW_ANSWER -> {
+                if (_reviewState.value == ReviewState.FRONT) {
+                    showBack()
+                }
+            }
+            GestureAction.PLAY_TTS -> {
+                currentCard?.let {
+                    val text = if (_reviewState.value == ReviewState.BACK) it.back else it.front
+                    ttsManager.speak(HtmlUtils.extractTtsText(text))
+                }
+            }
+            GestureAction.ANSWER_AGAIN -> answerCardWithEase(AnkiRepository.EASE_AGAIN)
+            GestureAction.ANSWER_HARD -> answerCardWithEase(AnkiRepository.EASE_HARD)
+            GestureAction.ANSWER_GOOD -> answerCardWithEase(AnkiRepository.EASE_GOOD)
+            GestureAction.ANSWER_EASY -> answerCardWithEase(AnkiRepository.EASE_EASY)
+        }
+    }
+
+    private fun answerCardWithEase(ease: Int) {
         if (_reviewState.value == ReviewState.BACK) {
-            answerCard(AnkiRepository.EASE_HARD)
-            vibrateManager.vibrateMedium()
+            when (ease) {
+                AnkiRepository.EASE_AGAIN -> vibrateManager.vibrateLong()
+                AnkiRepository.EASE_HARD -> vibrateManager.vibrateMedium()
+                AnkiRepository.EASE_GOOD -> vibrateManager.vibrateDoubleShort()
+                AnkiRepository.EASE_EASY -> vibrateManager.vibrateShort()
+            }
+            answerCard(ease)
         }
     }
 

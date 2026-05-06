@@ -7,6 +7,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,21 +51,32 @@ fun PermissionScreen(isInstalled: Boolean, onGrantClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DeckSelectionScreen(viewModel: ReviewViewModel, onDeckClick: (Long) -> Unit) {
+fun DeckSelectionScreen(
+    viewModel: ReviewViewModel, 
+    onDeckClick: (Long) -> Unit,
+    onSettingsClick: () -> Unit
+) {
     val decks by viewModel.decks
     
     LaunchedEffect(Unit) {
         viewModel.loadDecks()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            "选择牌组",
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(16.dp)
-        )
-        LazyColumn {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("选择牌组") },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
             items(decks) { deck ->
                 ListItem(
                     headlineContent = { Text(deck.name) },
@@ -118,7 +131,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             if (dragDirection == "H") {
                                 if (dragAmount > 0) viewModel.onSwipeRight() else viewModel.onSwipeLeft()
                             } else {
-                                if (dragAmount > 0) viewModel.onSwipeDown()
+                                if (dragAmount > 0) viewModel.onSwipeDown() else viewModel.onSwipeUp()
                             }
                         }
                     }

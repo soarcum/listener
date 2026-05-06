@@ -19,10 +19,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.ankilistener.app.data.AnkiRepository
+import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.ui.screens.DeckSelectionScreen
 import com.ankilistener.app.ui.screens.PermissionScreen
 import com.ankilistener.app.ui.screens.ReviewScreen
+import com.ankilistener.app.ui.screens.SettingsScreen
 import com.ankilistener.app.ui.viewmodel.ReviewViewModel
+import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
 
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: AnkiRepository
     private lateinit var ttsManager: TtsManager
     private lateinit var vibrateManager: VibrateManager
+    private lateinit var settingsRepository: SettingsRepository
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -46,6 +50,7 @@ class MainActivity : ComponentActivity() {
         repository = AnkiRepository(this)
         ttsManager = TtsManager(this)
         vibrateManager = VibrateManager(this)
+        settingsRepository = SettingsRepository(this)
 
         setContent {
             MaterialTheme {
@@ -65,12 +70,17 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        val factory = object : ViewModelProvider.Factory {
+                        val reviewFactory = object : ViewModelProvider.Factory {
                             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                return ReviewViewModel(repository, ttsManager, vibrateManager) as T
+                                return ReviewViewModel(repository, ttsManager, vibrateManager, settingsRepository) as T
                             }
                         }
-                        MainNavigation(factory)
+                        val settingsFactory = object : ViewModelProvider.Factory {
+                            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                return SettingsViewModel(settingsRepository) as T
+                            }
+                        }
+                        MainNavigation(reviewFactory, settingsFactory)
                     }
                 }
             }
@@ -79,9 +89,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainNavigation(factory: ViewModelProvider.Factory) {
+fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: ViewModelProvider.Factory) {
     val navController = rememberNavController()
-    val viewModel: ReviewViewModel = viewModel(factory = factory)
+    val viewModel: ReviewViewModel = viewModel(factory = reviewFactory)
+    val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory)
 
     NavHost(navController = navController, startDestination = "deck_selection") {
         composable("deck_selection") {
@@ -90,6 +101,9 @@ fun MainNavigation(factory: ViewModelProvider.Factory) {
                 onDeckClick = { deckId ->
                     viewModel.startReview(deckId)
                     navController.navigate("review")
+                },
+                onSettingsClick = {
+                    navController.navigate("settings")
                 }
             )
         }
@@ -97,6 +111,14 @@ fun MainNavigation(factory: ViewModelProvider.Factory) {
             ReviewScreen(
                 viewModel = viewModel,
                 onFinished = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable("settings") {
+            SettingsScreen(
+                viewModel = settingsViewModel,
+                onBack = {
                     navController.popBackStack()
                 }
             )
