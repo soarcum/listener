@@ -31,13 +31,13 @@ fun PermissionScreen(isInstalled: Boolean, onGrantClick: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = if (!isInstalled) "未安�?AnkiDroid" else "需要授�?,
+            text = if (!isInstalled) "未安装 AnkiDroid" else "需要授权",
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = if (!isInstalled) "请先安装 AnkiDroid 并开�?API 权限�? else "请在弹出框中点击允许，以便读取卡片�?,
+            text = if (!isInstalled) "请先安装 AnkiDroid 并开启 API 权限。" else "请在弹出框中点击允许，以便读取卡片。",
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
