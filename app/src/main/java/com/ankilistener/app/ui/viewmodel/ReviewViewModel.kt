@@ -130,14 +130,14 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         // 根据当前状态选择最合适的动作 (互斥逻辑)
         val action = when (_reviewState.value) {
             ReviewState.FRONT -> {
-                // 优先执行“显示答案”，其次是通用的 TTS/跳过/标记
+                // 优先执行“显示答案”，其次是通用的 TTS/跳过/标记/撤销
                 actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
-                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
             }
             ReviewState.BACK -> {
-                // 优先执行“评分”，其次是通用的 TTS/跳过/标记
+                // 优先执行“评分”，其次是通用的 TTS/跳过/标记/撤销
                 actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
-                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
             }
             else -> null
         } ?: return
@@ -162,6 +162,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             GestureAction.ANSWER_EASY -> "简单"
             GestureAction.SKIP -> "跳过"
             GestureAction.MARK -> "标记"
+            GestureAction.UNDO -> "撤销"
         }
         
         _gestureFeedback.value = FeedbackEvent("$gestureName ($actionName)")
@@ -193,6 +194,13 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             }
             GestureAction.MARK -> {
                 vibrateManager.vibrateDoubleShort()
+            }
+            GestureAction.UNDO -> {
+                if (_currentIndex.value > 0) {
+                    vibrateManager.vibrateMedium()
+                    _currentIndex.value--
+                    showFront()
+                }
             }
         }
     }

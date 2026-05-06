@@ -12,7 +12,8 @@ enum class GestureAction {
     ANSWER_AGAIN,
     ANSWER_HARD,
     ANSWER_GOOD,
-    ANSWER_EASY
+    ANSWER_EASY,
+    UNDO
 }
 
 enum class GestureType {

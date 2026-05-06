@@ -118,5 +118,6 @@ private fun getActionName(action: GestureAction): String {
         GestureAction.ANSWER_EASY -> "简单 (背面有效)"
         GestureAction.SKIP -> "跳过"
         GestureAction.MARK -> "标记"
+        GestureAction.UNDO -> "撤销"
     }
 }
