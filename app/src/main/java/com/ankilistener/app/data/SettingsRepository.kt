@@ -5,14 +5,14 @@ import android.content.SharedPreferences
 
 enum class GestureAction {
     NONE,
+    SKIP,
+    MARK,
     SHOW_ANSWER,
     PLAY_TTS,
     ANSWER_AGAIN,
     ANSWER_HARD,
     ANSWER_GOOD,
-    ANSWER_EASY,
-    SKIP,
-    MARK
+    ANSWER_EASY
 }
 
 enum class GestureType {

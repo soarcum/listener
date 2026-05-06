@@ -23,7 +23,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("手势设置") },
+                title = { Text("手势设置 (v1.1)") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
