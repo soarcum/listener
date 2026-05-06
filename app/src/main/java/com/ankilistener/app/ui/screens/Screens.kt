@@ -1,5 +1,8 @@
 package com.ankilistener.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -92,6 +95,14 @@ fun DeckSelectionScreen(
 fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
     val state by viewModel.reviewState
     val card = viewModel.currentCard
+    val gestureFeedback by viewModel.gestureFeedback
+
+    LaunchedEffect(gestureFeedback) {
+        if (gestureFeedback != null) {
+            kotlinx.coroutines.delay(800)
+            viewModel.clearGestureFeedback()
+        }
+    }
 
     if (state == ReviewState.FINISHED) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -170,6 +181,26 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = gestureFeedback != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.medium)
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = gestureFeedback?.message ?: "",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

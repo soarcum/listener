@@ -35,6 +35,15 @@ class ReviewViewModel(
     private val _reviewState = mutableStateOf(ReviewState.LOADING)
     val reviewState: State<ReviewState> = _reviewState
 
+data class FeedbackEvent(val message: String, val id: Long = System.currentTimeMillis())
+
+    private val _gestureFeedback = mutableStateOf<FeedbackEvent?>(null)
+    val gestureFeedback: State<FeedbackEvent?> = _gestureFeedback
+
+    fun clearGestureFeedback() {
+        _gestureFeedback.value = null
+    }
+
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
 
     fun loadDecks() {
@@ -114,6 +123,30 @@ class ReviewViewModel(
 
     private fun handleGesture(gestureType: GestureType) {
         val action = settingsRepository.getAction(gestureType)
+        
+        val gestureName = when (gestureType) {
+            GestureType.SINGLE_TAP -> "单击"
+            GestureType.DOUBLE_TAP -> "双击"
+            GestureType.SWIPE_LEFT -> "左滑"
+            GestureType.SWIPE_RIGHT -> "右滑"
+            GestureType.SWIPE_UP -> "上滑"
+            GestureType.SWIPE_DOWN -> "下滑"
+        }
+        
+        val actionName = when (action) {
+            GestureAction.NONE -> "无操作"
+            GestureAction.SHOW_ANSWER -> "显示答案"
+            GestureAction.PLAY_TTS -> "发音"
+            GestureAction.ANSWER_AGAIN -> "重来"
+            GestureAction.ANSWER_HARD -> "困难"
+            GestureAction.ANSWER_GOOD -> "良好"
+            GestureAction.ANSWER_EASY -> "简单"
+            GestureAction.SKIP -> "跳过"
+            GestureAction.MARK -> "标记"
+        }
+        
+        _gestureFeedback.value = FeedbackEvent("$gestureName ($actionName)")
+
         when (action) {
             GestureAction.NONE -> { /* Do nothing */ }
             GestureAction.SHOW_ANSWER -> {
@@ -131,6 +164,14 @@ class ReviewViewModel(
             GestureAction.ANSWER_HARD -> answerCardWithEase(AnkiRepository.EASE_HARD)
             GestureAction.ANSWER_GOOD -> answerCardWithEase(AnkiRepository.EASE_GOOD)
             GestureAction.ANSWER_EASY -> answerCardWithEase(AnkiRepository.EASE_EASY)
+            GestureAction.SKIP -> {
+                vibrateManager.vibrateShort()
+                nextCard()
+            }
+            GestureAction.MARK -> {
+                vibrateManager.vibrateDoubleShort()
+                // 仅做本地记录提示，不真正同步到 Anki
+            }
         }
     }
 

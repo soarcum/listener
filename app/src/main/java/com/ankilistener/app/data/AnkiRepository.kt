@@ -104,7 +104,8 @@ class AnkiRepository(private val context: Context) {
             put("answer_ease", ease)
             put("time_taken", 0) // Optional: add real time tracking if needed
         }
-        contentResolver.update(SCHEDULE_URI, values, null, null)
+        // Temporarily disabled for testing
+        // contentResolver.update(SCHEDULE_URI, values, null, null)
     }
 }
 

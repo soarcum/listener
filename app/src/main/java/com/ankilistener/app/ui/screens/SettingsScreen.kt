@@ -112,5 +112,7 @@ private fun getActionName(action: GestureAction): String {
         GestureAction.ANSWER_HARD -> "困难 (2)"
         GestureAction.ANSWER_GOOD -> "良好 (3)"
         GestureAction.ANSWER_EASY -> "简单 (4)"
+        GestureAction.SKIP -> "跳过 (不记录)"
+        GestureAction.MARK -> "标记 (Mark)"
     }
 }
