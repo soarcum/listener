@@ -21,7 +21,7 @@ jobs:
         cache: gradle
 
     - name: Build with Gradle
-      run: chmod +x gradlew && ./gradlew assembleDebug
+      run: gradle assembleDebug
 
     - name: Get Version Name
       id: get_version
