@@ -21,10 +21,16 @@ jobs:
         cache: gradle
 
     - name: Build with Gradle
-      run: gradle assembleDebug
+      run: chmod +x gradlew && ./gradlew assembleDebug
+
+    - name: Get Version Name
+      id: get_version
+      run: |
+        VERSION_NAME=$(grep "versionName" app/build.gradle | head -n 1 | awk -F'"' '{print $2}')
+        echo "VERSION=$VERSION_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
+        name: AnkiListener-v${{ steps.get_version.outputs.VERSION }}
         path: app/build/outputs/apk/debug/app-debug.apk
