@@ -73,6 +73,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         viewModelScope.launch {
             _reviewState.value = ReviewState.LOADING
             val cards = repository.getCardsToReview(deckId)
+            settingsRepository.setLastDeckId(deckId)
             _currentCards.value = cards
             _currentIndex.value = 0
             if (cards.isNotEmpty()) {
@@ -290,6 +291,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             GestureAction.ANSWER_EASY -> answerCardWithEase(AnkiRepository.EASE_EASY)
             GestureAction.SKIP -> {
                 vibrateManager.vibrateShort()
+                currentCard?.let { repository.buryCard(it) }
                 nextCard()
             }
             GestureAction.MARK -> {

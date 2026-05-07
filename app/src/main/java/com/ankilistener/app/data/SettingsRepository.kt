@@ -126,4 +126,12 @@ class SettingsRepository(context: Context) {
     fun setSkipQuestionOnBack(skip: Boolean) {
         ttsPrefs.edit().putBoolean("skip_question_on_back", skip).apply()
     }
+
+    fun getLastDeckId(): Long {
+        return ttsPrefs.getLong("last_deck_id", -1L)
+    }
+
+    fun setLastDeckId(deckId: Long) {
+        ttsPrefs.edit().putLong("last_deck_id", deckId).apply()
+    }
 }

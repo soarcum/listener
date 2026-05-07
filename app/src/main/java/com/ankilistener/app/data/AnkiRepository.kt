@@ -104,8 +104,16 @@ class AnkiRepository(private val context: Context) {
             put("answer_ease", ease)
             put("time_taken", 0) // Optional: add real time tracking if needed
         }
-        // Temporarily disabled for testing
-        // contentResolver.update(SCHEDULE_URI, values, null, null)
+        contentResolver.update(SCHEDULE_URI, values, null, null)
+    }
+
+    fun buryCard(card: Card) {
+        val values = ContentValues().apply {
+            put(NOTE_ID, card.id)
+            put(CARD_ORD, card.ord)
+            put("action", "bury")
+        }
+        contentResolver.update(SCHEDULE_URI, values, null, null)
     }
 }
 
