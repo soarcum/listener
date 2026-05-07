@@ -1,16 +1,21 @@
 package com.ankilistener.app.util
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.util.Log
 import kotlinx.coroutines.*
-import java.net.URLEncoder
 
 /**
  * TTS manager that streams audio from a remote HTTP TTS API.
  * Compatible with Legado-style TTS endpoints.
+ *
+ * Features:
+ * - Disk-based audio caching (same text won't re-download)
+ * - Prefetch support for upcoming cards
+ * - Cache management (stats, clear)
  */
-class ApiTtsManager {
+class ApiTtsManager(context: Context) {
 
     companion object {
         private const val TAG = "ApiTtsManager"
@@ -20,31 +25,33 @@ class ApiTtsManager {
     private var playJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    val cache = TtsAudioCache(context)
+
     var baseUrl: String = "http://172.22.64.1:3000"
     var speakSpeed: String = "1.0"
     var delay: String = "5"
     var voice: String = "zh_female_wenroutaozi_uranus_bigtts"
 
     /**
-     * Speaks the given text by streaming audio from the remote TTS API.
+     * Speaks the given text. Uses cached audio if available, otherwise
+     * downloads, caches, then plays.
      */
     fun speak(text: String) {
         stop()
-
         if (text.isBlank()) return
 
         playJob = scope.launch {
             try {
-                val encodedText = URLEncoder.encode(text, "UTF-8")
-                val url = "${baseUrl}/api/reader/tts/stream" +
-                        "?text=$encodedText" +
-                        "&speed=$speakSpeed" +
-                        "&voice=$voice" +
-                        "&usePrefetch=false" +
-                        "&delay=$delay"
+                // Try cache first, download if miss
+                val filePath = cache.getCachedFilePath(text, voice, speakSpeed)
+                    ?: cache.downloadAndCache(text, baseUrl, voice, speakSpeed, delay)
 
-                Log.d(TAG, "TTS API request: $url")
+                if (filePath == null) {
+                    Log.e(TAG, "Failed to get audio for text")
+                    return@launch
+                }
 
+                // Play from local file on Main thread
                 withContext(Dispatchers.Main) {
                     try {
                         val player = MediaPlayer().apply {
@@ -54,7 +61,7 @@ class ApiTtsManager {
                                     .setUsage(AudioAttributes.USAGE_MEDIA)
                                     .build()
                             )
-                            setDataSource(url)
+                            setDataSource(filePath)
                             setOnErrorListener { _, what, extra ->
                                 Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
                                 true
@@ -65,22 +72,46 @@ class ApiTtsManager {
                                     mediaPlayer = null
                                 }
                             }
-                            prepareAsync()
-                            setOnPreparedListener { mp ->
-                                mp.start()
-                            }
+                            prepare() // Synchronous since it's a local file
+                            start()
                         }
                         mediaPlayer = player
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to start MediaPlayer", e)
+                        Log.e(TAG, "Failed to play cached audio", e)
                     }
                 }
             } catch (e: CancellationException) {
                 // Coroutine cancelled, expected behavior
             } catch (e: Exception) {
-                Log.e(TAG, "TTS API error", e)
+                Log.e(TAG, "TTS speak error", e)
             }
         }
+    }
+
+    /**
+     * Prefetch audio for the given text without playing it.
+     * Downloads and caches the audio in background.
+     */
+    fun prefetch(text: String) {
+        if (text.isBlank()) return
+        if (cache.isCached(text, voice, speakSpeed)) return
+
+        scope.launch {
+            try {
+                cache.downloadAndCache(text, baseUrl, voice, speakSpeed, delay)
+            } catch (e: CancellationException) {
+                // expected
+            } catch (e: Exception) {
+                Log.e(TAG, "Prefetch error", e)
+            }
+        }
+    }
+
+    /**
+     * Check if audio for the given text is already cached.
+     */
+    fun isCached(text: String): Boolean {
+        return cache.isCached(text, voice, speakSpeed)
     }
 
     fun stop() {

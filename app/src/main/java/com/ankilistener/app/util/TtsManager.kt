@@ -13,7 +13,7 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = TextToSpeech(context, this)
     private var isReady = false
 
-    private val apiTtsManager = ApiTtsManager()
+    val apiTtsManager = ApiTtsManager(context)
 
     var provider: TtsProvider = TtsProvider.SYSTEM
 
@@ -53,6 +53,40 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
             TtsProvider.SYSTEM -> tts?.stop()
             TtsProvider.API -> apiTtsManager.stop()
         }
+    }
+
+    /**
+     * Prefetch audio for a text. Only effective when using API provider.
+     */
+    fun prefetch(text: String) {
+        if (provider == TtsProvider.API) {
+            apiTtsManager.prefetch(text)
+        }
+    }
+
+    /**
+     * Check if audio for the given text is cached. Only meaningful for API provider.
+     */
+    fun isCached(text: String): Boolean {
+        return if (provider == TtsProvider.API) {
+            apiTtsManager.isCached(text)
+        } else {
+            true // System TTS is always "ready"
+        }
+    }
+
+    /**
+     * Get cache stats.
+     */
+    fun getCacheStats(): TtsAudioCache.CacheStats {
+        return apiTtsManager.cache.getCacheStats()
+    }
+
+    /**
+     * Clear all cached audio.
+     */
+    fun clearCache() {
+        apiTtsManager.cache.clearCache()
     }
 
     fun release() {

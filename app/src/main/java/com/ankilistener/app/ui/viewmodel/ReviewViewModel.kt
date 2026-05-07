@@ -13,11 +13,22 @@ import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class ReviewState {
     FRONT, BACK, FINISHED, LOADING
 }
+
+/**
+ * Prefetch/cache status for the current review session.
+ */
+data class PrefetchStatus(
+    val totalCards: Int = 0,
+    val cachedFrontCount: Int = 0,
+    val cachedBackCount: Int = 0,
+    val prefetchCount: Int = 0
+)
 
 class ReviewViewModel(
     private val repository: AnkiRepository,
@@ -47,6 +58,9 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private val _fontScale = mutableStateOf(1f)
     val fontScale: State<Float> = _fontScale
 
+    private val _prefetchStatus = mutableStateOf(PrefetchStatus())
+    val prefetchStatus: State<PrefetchStatus> = _prefetchStatus
+
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
 
     fun loadDecks() {
@@ -63,6 +77,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             _currentIndex.value = 0
             if (cards.isNotEmpty()) {
                 showFront()
+                prefetchUpcoming()
             } else {
                 finishReview()
             }
@@ -89,6 +104,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _currentIndex.value++
         if (_currentIndex.value < _currentCards.value.size) {
             showFront()
+            prefetchUpcoming()
         } else {
             finishReview()
         }
@@ -99,7 +115,62 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         ttsManager.speak("复习完成")
     }
 
-    // Gesture Actions
+    // ---- Prefetch logic ----
+
+    /**
+     * Prefetch audio for upcoming cards (front + back).
+     * The number of cards to prefetch is read from settings.
+     */
+    private fun prefetchUpcoming() {
+        viewModelScope.launch {
+            val prefetchCount = settingsRepository.getPrefetchCount()
+            val cards = _currentCards.value
+            val currentIdx = _currentIndex.value
+
+            // Prefetch from current card to (current + prefetchCount)
+            val endIdx = (currentIdx + prefetchCount).coerceAtMost(cards.size)
+            for (i in currentIdx until endIdx) {
+                val card = cards[i]
+                val frontText = HtmlUtils.extractTtsText(card.front)
+                val backText = HtmlUtils.extractTtsText(card.back)
+                ttsManager.prefetch(frontText)
+                ttsManager.prefetch(backText)
+            }
+
+            // Update status after a short delay to let downloads start
+            delay(500)
+            updatePrefetchStatus()
+        }
+    }
+
+    /**
+     * Recalculate and update the prefetch status for the UI.
+     */
+    fun updatePrefetchStatus() {
+        val cards = _currentCards.value
+        val prefetchCount = settingsRepository.getPrefetchCount()
+        val currentIdx = _currentIndex.value
+
+        val endIdx = (currentIdx + prefetchCount).coerceAtMost(cards.size)
+        var cachedFront = 0
+        var cachedBack = 0
+
+        for (i in currentIdx until endIdx) {
+            val card = cards[i]
+            if (ttsManager.isCached(HtmlUtils.extractTtsText(card.front))) cachedFront++
+            if (ttsManager.isCached(HtmlUtils.extractTtsText(card.back))) cachedBack++
+        }
+
+        _prefetchStatus.value = PrefetchStatus(
+            totalCards = endIdx - currentIdx,
+            cachedFrontCount = cachedFront,
+            cachedBackCount = cachedBack,
+            prefetchCount = prefetchCount
+        )
+    }
+
+    // ---- Gesture Actions ----
+
     fun onSingleTap() {
         handleGesture(GestureType.SINGLE_TAP)
     }
@@ -145,12 +216,12 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         // 根据当前状态选择最合适的动作 (互斥逻辑)
         val action = when (_reviewState.value) {
             ReviewState.FRONT -> {
-                // 优先执行“显示答案”，其次是通用的 TTS/跳过/标记/撤销
+                // 优先执行"显示答案"，其次是通用的 TTS/跳过/标记/撤销
                 actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
             }
             ReviewState.BACK -> {
-                // 优先执行“评分”，其次是通用的 TTS/跳过/标记/撤销
+                // 优先执行"评分"，其次是通用的 TTS/跳过/标记/撤销
                 actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
             }

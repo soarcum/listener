@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -98,6 +99,15 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
     val card = viewModel.currentCard
     val gestureFeedback by viewModel.gestureFeedback
     val fontScale by viewModel.fontScale
+    val prefetchStatus by viewModel.prefetchStatus
+
+    // Periodically refresh prefetch status
+    LaunchedEffect(state, card) {
+        while (true) {
+            kotlinx.coroutines.delay(2000)
+            viewModel.updatePrefetchStatus()
+        }
+    }
 
     LaunchedEffect(gestureFeedback) {
         if (gestureFeedback != null) {
@@ -199,6 +209,28 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
+            )
+        }
+    }
+
+    // Preload status indicator (bottom-right)
+    if (prefetchStatus.prefetchCount > 0 && prefetchStatus.totalCards > 0) {
+        val cached = (prefetchStatus.cachedFrontCount + prefetchStatus.cachedBackCount)
+        val total = prefetchStatus.totalCards * 2 // front + back
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(12.dp)
+                .background(
+                    Color.Black.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+        ) {
+            Text(
+                text = "\uD83D\uDD0A $cached/$total",
+                color = if (cached == total) Color(0xFF81C784) else Color.White.copy(alpha = 0.8f),
+                fontSize = 12.sp
             )
         }
     }

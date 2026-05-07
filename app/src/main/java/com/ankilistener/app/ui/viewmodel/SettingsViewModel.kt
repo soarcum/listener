@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
+import com.ankilistener.app.util.TtsAudioCache
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.TtsProvider
 
@@ -14,7 +15,8 @@ data class TtsSettings(
     val baseUrl: String = "http://172.22.64.1:3000",
     val speed: String = "1.0",
     val delay: String = "5",
-    val voice: String = "zh_female_wenroutaozi_uranus_bigtts"
+    val voice: String = "zh_female_wenroutaozi_uranus_bigtts",
+    val prefetchCount: Int = 3
 )
 
 class SettingsViewModel(
@@ -28,6 +30,9 @@ class SettingsViewModel(
     private val _ttsSettings = mutableStateOf(TtsSettings())
     val ttsSettings: State<TtsSettings> = _ttsSettings
 
+    private val _cacheStats = mutableStateOf(TtsAudioCache.CacheStats(0, 0L))
+    val cacheStats: State<TtsAudioCache.CacheStats> = _cacheStats
+
     init {
         loadSettings()
     }
@@ -39,8 +44,19 @@ class SettingsViewModel(
             baseUrl = settingsRepository.getTtsBaseUrl(),
             speed = settingsRepository.getTtsSpeed(),
             delay = settingsRepository.getTtsDelay(),
-            voice = settingsRepository.getTtsVoice()
+            voice = settingsRepository.getTtsVoice(),
+            prefetchCount = settingsRepository.getPrefetchCount()
         )
+        refreshCacheStats()
+    }
+
+    fun refreshCacheStats() {
+        _cacheStats.value = ttsManager.getCacheStats()
+    }
+
+    fun clearCache() {
+        ttsManager.clearCache()
+        refreshCacheStats()
     }
 
     fun updateActionGesture(action: GestureAction, gesture: GestureType) {
@@ -89,5 +105,10 @@ class SettingsViewModel(
         settingsRepository.setTtsVoice(voice)
         _ttsSettings.value = _ttsSettings.value.copy(voice = voice)
         applyTtsConfig()
+    }
+
+    fun updatePrefetchCount(count: Int) {
+        settingsRepository.setPrefetchCount(count)
+        _ttsSettings.value = _ttsSettings.value.copy(prefetchCount = count)
     }
 }

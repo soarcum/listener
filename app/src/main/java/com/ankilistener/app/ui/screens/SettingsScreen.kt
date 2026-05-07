@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,12 +19,19 @@ import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.TtsProvider
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val mappings by viewModel.gestureMappings
     val ttsSettings by viewModel.ttsSettings
+    val cacheStats by viewModel.cacheStats
+
+    // Refresh cache stats when entering settings
+    LaunchedEffect(Unit) {
+        viewModel.refreshCacheStats()
+    }
 
     Scaffold(
         topBar = {
@@ -113,6 +122,138 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
+                }
+
+                // ---- Prefetch & Cache Section ----
+                item {
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                }
+
+                item {
+                    Text(
+                        "预加载与缓存",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                }
+
+                // Prefetch count slider
+                item {
+                    var sliderValue by remember(ttsSettings.prefetchCount) {
+                        mutableStateOf(ttsSettings.prefetchCount.toFloat())
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("预加载卡片数", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "${sliderValue.roundToInt()} 张",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Slider(
+                            value = sliderValue,
+                            onValueChange = { sliderValue = it },
+                            onValueChangeFinished = {
+                                viewModel.updatePrefetchCount(sliderValue.roundToInt())
+                            },
+                            valueRange = 0f..10f,
+                            steps = 9
+                        )
+                        Text(
+                            "提前下载接下来的卡片音频，0 = 不预加载",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Cache stats
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("缓存统计", style = MaterialTheme.typography.titleSmall)
+                                Row {
+                                    IconButton(
+                                        onClick = { viewModel.refreshCacheStats() },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Refresh,
+                                            contentDescription = "刷新",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "已缓存音频",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "${cacheStats.fileCount} 条",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "占用空间",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "${cacheStats.totalSizeMB} MB",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { viewModel.clearCache() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("清除所有缓存")
+                            }
+                        }
+                    }
                 }
             }
 

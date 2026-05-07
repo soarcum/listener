@@ -110,4 +110,12 @@ class SettingsRepository(context: Context) {
     fun setTtsVoice(voice: String) {
         ttsPrefs.edit().putString("tts_voice", voice).apply()
     }
+
+    fun getPrefetchCount(): Int {
+        return ttsPrefs.getInt("prefetch_count", 3)
+    }
+
+    fun setPrefetchCount(count: Int) {
+        ttsPrefs.edit().putInt("prefetch_count", count.coerceIn(0, 20)).apply()
+    }
 }
