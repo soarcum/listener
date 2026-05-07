@@ -96,7 +96,15 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         vibrateManager.vibrateShort()
         currentCard?.let {
             ttsManager.stop()
-            ttsManager.speak(HtmlUtils.extractTtsText(it.back))
+            ttsManager.speak(getBackTtsText(it))
+        }
+    }
+
+    private fun getBackTtsText(card: Card): String {
+        return if (settingsRepository.getSkipQuestionOnBack()) {
+            HtmlUtils.extractAnswerOnly(card.back)
+        } else {
+            HtmlUtils.extractTtsText(card.back)
         }
     }
 
@@ -132,7 +140,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             for (i in currentIdx until endIdx) {
                 val card = cards[i]
                 val frontText = HtmlUtils.extractTtsText(card.front)
-                val backText = HtmlUtils.extractTtsText(card.back)
+                val backText = getBackTtsText(card)
                 ttsManager.prefetch(frontText)
                 ttsManager.prefetch(backText)
             }
@@ -158,7 +166,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         for (i in currentIdx until endIdx) {
             val card = cards[i]
             if (ttsManager.isCached(HtmlUtils.extractTtsText(card.front))) cachedFront++
-            if (ttsManager.isCached(HtmlUtils.extractTtsText(card.back))) cachedBack++
+            if (ttsManager.isCached(getBackTtsText(card))) cachedBack++
         }
 
         _prefetchStatus.value = PrefetchStatus(
@@ -268,8 +276,12 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             }
             GestureAction.PLAY_TTS -> {
                 currentCard?.let {
-                    val text = if (_reviewState.value == ReviewState.BACK) it.back else it.front
-                    ttsManager.speak(HtmlUtils.extractTtsText(text))
+                    val text = if (_reviewState.value == ReviewState.BACK) {
+                        getBackTtsText(it)
+                    } else {
+                        HtmlUtils.extractTtsText(it.front)
+                    }
+                    ttsManager.speak(text)
                 }
             }
             GestureAction.ANSWER_AGAIN -> answerCardWithEase(AnkiRepository.EASE_AGAIN)

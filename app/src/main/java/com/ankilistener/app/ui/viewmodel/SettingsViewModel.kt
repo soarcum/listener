@@ -16,7 +16,8 @@ data class TtsSettings(
     val speed: String = "1.0",
     val delay: String = "5",
     val voice: String = "zh_female_wenroutaozi_uranus_bigtts",
-    val prefetchCount: Int = 3
+    val prefetchCount: Int = 3,
+    val skipQuestionOnBack: Boolean = false
 )
 
 class SettingsViewModel(
@@ -45,7 +46,8 @@ class SettingsViewModel(
             speed = settingsRepository.getTtsSpeed(),
             delay = settingsRepository.getTtsDelay(),
             voice = settingsRepository.getTtsVoice(),
-            prefetchCount = settingsRepository.getPrefetchCount()
+            prefetchCount = settingsRepository.getPrefetchCount(),
+            skipQuestionOnBack = settingsRepository.getSkipQuestionOnBack()
         )
         refreshCacheStats()
     }
@@ -110,5 +112,10 @@ class SettingsViewModel(
     fun updatePrefetchCount(count: Int) {
         settingsRepository.setPrefetchCount(count)
         _ttsSettings.value = _ttsSettings.value.copy(prefetchCount = count)
+    }
+
+    fun updateSkipQuestionOnBack(skip: Boolean) {
+        settingsRepository.setSkipQuestionOnBack(skip)
+        _ttsSettings.value = _ttsSettings.value.copy(skipQuestionOnBack = skip)
     }
 }

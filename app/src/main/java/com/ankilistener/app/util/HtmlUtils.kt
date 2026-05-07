@@ -77,4 +77,14 @@ object HtmlUtils {
     fun extractTtsText(text: String): String {
         return parseHtml(text).toString()
     }
+
+    /**
+     * Extracts only the answer part (after <hr id=answer>) for TTS.
+     */
+    fun extractAnswerOnly(html: String): String {
+        // Anki standard separator for back side
+        val parts = html.split(Regex("<hr\\s+id=[\"']?answer[\"']?\\s*/?>", RegexOption.IGNORE_CASE))
+        val answerPart = if (parts.size > 1) parts.last() else html
+        return extractTtsText(answerPart)
+    }
 }
