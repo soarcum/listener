@@ -106,15 +106,6 @@ class AnkiRepository(private val context: Context) {
         }
         contentResolver.update(SCHEDULE_URI, values, null, null)
     }
-
-    fun buryCard(card: Card) {
-        val values = ContentValues().apply {
-            put(NOTE_ID, card.id)
-            put(CARD_ORD, card.ord)
-            put("action", "bury")
-        }
-        contentResolver.update(SCHEDULE_URI, values, null, null)
-    }
 }
 
 data class Deck(val id: Long, val name: String)

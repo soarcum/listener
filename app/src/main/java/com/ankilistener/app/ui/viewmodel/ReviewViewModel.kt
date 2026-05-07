@@ -119,6 +119,24 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         }
     }
 
+    private fun skipCurrentCard() {
+        val cards = _currentCards.value.toMutableList()
+        val currentIdx = _currentIndex.value
+        if (currentIdx < cards.size) {
+            // 从当前队列中移除，实现“本次会话不再出现”
+            cards.removeAt(currentIdx)
+            _currentCards.value = cards
+            
+            // 索引不需要增加，因为后面的卡片已经顶上来了
+            if (currentIdx < cards.size) {
+                showFront()
+                prefetchUpcoming()
+            } else {
+                finishReview()
+            }
+        }
+    }
+
     private fun finishReview() {
         _reviewState.value = ReviewState.FINISHED
         ttsManager.speak("复习完成")
@@ -291,8 +309,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             GestureAction.ANSWER_EASY -> answerCardWithEase(AnkiRepository.EASE_EASY)
             GestureAction.SKIP -> {
                 vibrateManager.vibrateShort()
-                currentCard?.let { repository.buryCard(it) }
-                nextCard()
+                skipCurrentCard()
             }
             GestureAction.MARK -> {
                 vibrateManager.vibrateDoubleShort()
