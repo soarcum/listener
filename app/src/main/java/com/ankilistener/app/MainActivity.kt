@@ -52,6 +52,15 @@ class MainActivity : ComponentActivity() {
         vibrateManager = VibrateManager(this)
         settingsRepository = SettingsRepository(this)
 
+        // Apply saved TTS settings
+        ttsManager.provider = settingsRepository.getTtsProvider()
+        ttsManager.updateApiConfig(
+            baseUrl = settingsRepository.getTtsBaseUrl(),
+            speed = settingsRepository.getTtsSpeed(),
+            delay = settingsRepository.getTtsDelay(),
+            voice = settingsRepository.getTtsVoice()
+        )
+
         setContent {
             MaterialTheme {
                 Surface(
@@ -77,7 +86,7 @@ class MainActivity : ComponentActivity() {
                         }
                         val settingsFactory = object : ViewModelProvider.Factory {
                             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                return SettingsViewModel(settingsRepository) as T
+                                return SettingsViewModel(settingsRepository, ttsManager) as T
                             }
                         }
                         MainNavigation(reviewFactory, settingsFactory)
