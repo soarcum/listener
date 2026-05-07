@@ -101,8 +101,8 @@ class AnkiRepository(private val context: Context) {
         val values = ContentValues().apply {
             put(NOTE_ID, card.id)
             put(CARD_ORD, card.ord)
-            put("answer_ease", ease)
-            put("time_taken", 0) // Optional: add real time tracking if needed
+            put("ease", ease)
+            put("time_taken", 0)
         }
         contentResolver.update(SCHEDULE_URI, values, null, null)
     }

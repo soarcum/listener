@@ -16,6 +16,8 @@ import kotlin.math.abs
 fun Modifier.detectAnkiAdvancedGestures(
     onSwipeLeft: () -> Unit = {},
     onSwipeRight: () -> Unit = {},
+    onSwipeUp: () -> Unit = {},
+    onSwipeDown: () -> Unit = {},
     onTwoFingerTap: () -> Unit = {},
     onScaleChange: (Float) -> Unit = {}
 ): Modifier = this.pointerInput(Unit) {
@@ -53,12 +55,18 @@ fun Modifier.detectAnkiAdvancedGestures(
         val absY = abs(totalDragY)
 
         if (maxPointers == 2 && absX < 30 && absY < 30) {
-            // 双指点击：曾出现过两指，且最终位移不大
+            // 双指点击
             onTwoFingerTap()
         } else if (maxPointers == 1) {
             // 单指滑动
-            if (absX > swipeThresholdPx && absX > absY) {
-                if (totalDragX > 0) onSwipeRight() else onSwipeLeft()
+            if (absX > swipeThresholdPx || absY > swipeThresholdPx) {
+                if (absX > absY) {
+                    // 水平滑动
+                    if (totalDragX > 0) onSwipeRight() else onSwipeLeft()
+                } else {
+                    // 垂直滑动
+                    if (totalDragY > 0) onSwipeDown() else onSwipeUp()
+                }
             }
         }
     }

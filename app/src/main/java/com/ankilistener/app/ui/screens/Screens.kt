@@ -140,6 +140,8 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
             .detectAnkiAdvancedGestures(
                 onSwipeLeft = { viewModel.onSwipeLeft() },
                 onSwipeRight = { viewModel.onSwipeRight() },
+                onSwipeUp = { viewModel.onSwipeUp() },
+                onSwipeDown = { viewModel.onSwipeDown() },
                 onTwoFingerTap = { viewModel.onTwoFingerTap() },
                 onScaleChange = { viewModel.onScaleChange(it) }
             ),
