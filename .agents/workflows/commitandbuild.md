@@ -6,14 +6,33 @@ description: commit@build
 
 这个工作流用于将本地代码提交、推送到 GitHub，并自动监听 GitHub Actions 的打包状态，直到打包完成并输出成功或失败的结果。
 
-## 步骤 1：添加并提交代码
-
-你可以根据实际情况修改提交信息（commit message）。
+## 步骤 1：自动增加版本号并提交代码
 
 // turbo
 ```powershell
+# 1. 自动增加版本号
+$gradleFile = "app/build.gradle"
+$content = Get-Content $gradleFile -Raw
+$versionCodeMatch = [regex]::Match($content, 'versionCode (\d+)')
+if ($versionCodeMatch.Success) {
+    $oldCode = $versionCodeMatch.Groups[1].Value
+    $newCode = [int]$oldCode + 1
+    $content = $content -replace "versionCode $oldCode", "versionCode $newCode"
+}
+$versionNameMatch = [regex]::Match($content, 'versionName "(\d+)\.(\d+)\.(\d+)"')
+if ($versionNameMatch.Success) {
+    $major = $versionNameMatch.Groups[1].Value
+    $minor = $versionNameMatch.Groups[2].Value
+    $patch = [int]$versionNameMatch.Groups[3].Value + 1
+    $newVersionName = "$major.$minor.$patch"
+    $content = $content -replace "versionName `"$major.$minor.$patch`"", "versionName `"$newVersionName`""
+}
+$content | Set-Content $gradleFile -NoNewline
+Write-Host "✅ 版本号已更新为: $newVersionName ($newCode)"
+
+# 2. 提交并推送
 git add .
-git commit -m "chore: auto commit from workflow"
+git commit -m "chore: bump version to $newVersionName and auto commit"
 git push
 ```
 
