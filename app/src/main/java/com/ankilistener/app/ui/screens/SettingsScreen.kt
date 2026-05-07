@@ -104,6 +104,8 @@ private fun getGestureName(gesture: GestureType): String {
         GestureType.SWIPE_RIGHT -> "向右滑动"
         GestureType.SWIPE_UP -> "向上滑动"
         GestureType.SWIPE_DOWN -> "向下滑动"
+        GestureType.LONG_PRESS -> "长按屏幕"
+        GestureType.TWO_FINGER_TAP -> "双指点击"
     }
 }
 

@@ -28,7 +28,6 @@ import com.ankilistener.app.ui.viewmodel.ReviewState
 import com.ankilistener.app.ui.viewmodel.ReviewViewModel
 import com.ankilistener.app.util.HtmlUtils.toAnnotatedString
 import com.ankilistener.app.util.HtmlUtils.parseHtml
-import kotlin.math.abs
 
 @Composable
 fun PermissionScreen(isInstalled: Boolean, onGrantClick: () -> Unit) {
@@ -98,6 +97,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
     val state by viewModel.reviewState
     val card = viewModel.currentCard
     val gestureFeedback by viewModel.gestureFeedback
+    val fontScale by viewModel.fontScale
 
     LaunchedEffect(gestureFeedback) {
         if (gestureFeedback != null) {
@@ -123,33 +123,16 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { viewModel.onSingleTap() },
-                    onDoubleTap = { viewModel.onDoubleTap() }
+                    onDoubleTap = { viewModel.onDoubleTap() },
+                    onLongPress = { viewModel.onLongPress() }
                 )
             }
-            .pointerInput(Unit) {
-                var dragAmount = 0f
-                var dragDirection = "" // "H" or "V"
-                
-                detectDragGestures(
-                    onDragStart = { dragAmount = 0f; dragDirection = "" },
-                    onDrag = { change, amount ->
-                        change.consume()
-                        if (dragDirection == "") {
-                            dragDirection = if (abs(amount.x) > abs(amount.y)) "H" else "V"
-                        }
-                        dragAmount += if (dragDirection == "H") amount.x else amount.y
-                    },
-                    onDragEnd = {
-                        if (abs(dragAmount) > 100) {
-                            if (dragDirection == "H") {
-                                if (dragAmount > 0) viewModel.onSwipeRight() else viewModel.onSwipeLeft()
-                            } else {
-                                if (dragAmount > 0) viewModel.onSwipeDown() else viewModel.onSwipeUp()
-                            }
-                        }
-                    }
-                )
-            },
+            .detectAnkiAdvancedGestures(
+                onSwipeLeft = { viewModel.onSwipeLeft() },
+                onSwipeRight = { viewModel.onSwipeRight() },
+                onTwoFingerTap = { viewModel.onTwoFingerTap() },
+                onScaleChange = { viewModel.onScaleChange(it) }
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -164,17 +147,17 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                 if (state == ReviewState.FRONT) {
                     Text(
                         text = parseHtml(it.front).toAnnotatedString(),
-                        fontSize = 24.sp,
+                        fontSize = (24 * fontScale).sp,
                         textAlign = TextAlign.Center,
-                        lineHeight = 32.sp
+                        lineHeight = (32 * fontScale).sp
                     )
                 } else if (state == ReviewState.BACK) {
                     Text(
                         text = parseHtml(it.front).toAnnotatedString(),
-                        fontSize = 16.sp,
+                        fontSize = (16 * fontScale).sp,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 22.sp
+                        lineHeight = (22 * fontScale).sp
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Divider(
@@ -185,9 +168,9 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
                         text = parseHtml(it.back).toAnnotatedString(),
-                        fontSize = 22.sp,
+                        fontSize = (22 * fontScale).sp,
                         textAlign = TextAlign.Center,
-                        lineHeight = 30.sp
+                        lineHeight = (30 * fontScale).sp
                     )
                 }
             }

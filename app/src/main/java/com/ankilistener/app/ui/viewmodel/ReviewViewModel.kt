@@ -44,6 +44,9 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _gestureFeedback.value = null
     }
 
+    private val _fontScale = mutableStateOf(1f)
+    val fontScale: State<Float> = _fontScale
+
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
 
     fun loadDecks() {
@@ -121,6 +124,18 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         handleGesture(GestureType.SWIPE_UP)
     }
 
+    fun onLongPress() {
+        handleGesture(GestureType.LONG_PRESS)
+    }
+
+    fun onTwoFingerTap() {
+        handleGesture(GestureType.TWO_FINGER_TAP)
+    }
+
+    fun onScaleChange(scale: Float) {
+        _fontScale.value = (_fontScale.value * scale).coerceIn(0.5f, 3.0f)
+    }
+
     private fun handleGesture(gestureType: GestureType) {
         val mappings = settingsRepository.getAllMappings()
         val actionsForGesture = mappings.filter { it.value == gestureType }.keys
@@ -150,6 +165,8 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             GestureType.SWIPE_RIGHT -> "右滑"
             GestureType.SWIPE_UP -> "上滑"
             GestureType.SWIPE_DOWN -> "下滑"
+            GestureType.LONG_PRESS -> "长按"
+            GestureType.TWO_FINGER_TAP -> "双指点击"
         }
         
         val actionName = when (action) {

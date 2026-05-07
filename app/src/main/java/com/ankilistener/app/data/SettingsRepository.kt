@@ -23,7 +23,9 @@ enum class GestureType {
     SWIPE_LEFT,
     SWIPE_RIGHT,
     SWIPE_UP,
-    SWIPE_DOWN
+    SWIPE_DOWN,
+    LONG_PRESS,
+    TWO_FINGER_TAP
 }
 
 class SettingsRepository(context: Context) {
