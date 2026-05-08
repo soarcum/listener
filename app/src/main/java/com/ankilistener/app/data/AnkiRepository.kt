@@ -6,18 +6,20 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import com.ichi2.anki.api.AddContentApi
+import com.ankilistener.app.util.AppLogger
 
 class AnkiRepository(private val context: Context) {
     private val contentResolver: ContentResolver = context.contentResolver
 
     companion object {
+        private const val TAG = "AnkiRepo"
         private const val AUTHORITY = "com.ichi2.anki.flashcards"
         val AUTHORITY_URI: Uri = Uri.parse("content://$AUTHORITY")
         val DECKS_URI: Uri = Uri.withAppendedPath(AUTHORITY_URI, "decks")
         val SCHEDULE_URI: Uri = Uri.withAppendedPath(AUTHORITY_URI, "schedule")
         val NOTES_URI: Uri = Uri.withAppendedPath(AUTHORITY_URI, "notes")
         
-        // Column Names
+        // Column Names (matching official FlashCardsContract)
         const val DECK_ID = "deck_id"
         const val DECK_NAME = "deck_name"
         const val NOTE_ID = "note_id"
@@ -25,7 +27,13 @@ class AnkiRepository(private val context: Context) {
         const val QUESTION = "question"
         const val ANSWER = "answer"
         
-        // Eases
+        // ReviewInfo write-only columns (official names)
+        const val EASE_COLUMN = "answer_ease"    // NOT "ease"!
+        const val TIME_TAKEN_COLUMN = "time_taken"
+        const val BURY_COLUMN = "buried"         // NOT "action"!
+        const val SUSPEND_COLUMN = "suspended"
+        
+        // Ease values (matching com.ichi2.anki.api.Ease)
         const val EASE_AGAIN = 1
         const val EASE_HARD = 2
         const val EASE_GOOD = 3
@@ -37,11 +45,11 @@ class AnkiRepository(private val context: Context) {
     }
 
     fun getDeckList(): List<Deck> {
-        android.util.Log.i("AnkiRepository", "getDeckList() started")
+        AppLogger.i(TAG, "getDeckList() started")
         val decks = mutableListOf<Deck>()
         try {
             val cursor: Cursor? = contentResolver.query(DECKS_URI, null, null, null, null)
-            android.util.Log.d("AnkiRepository", "getDeckList() cursor: $cursor")
+            AppLogger.d(TAG, "getDeckList() cursor: $cursor, count=${cursor?.count}")
             cursor?.use {
                 val idIndex = it.getColumnIndex(DECK_ID)
                 val nameIndex = it.getColumnIndex(DECK_NAME)
@@ -52,48 +60,63 @@ class AnkiRepository(private val context: Context) {
                         val name = it.getString(nameIndex)
                         decks.add(Deck(id, name))
                     }
+                } else {
+                    AppLogger.w(TAG, "getDeckList() column not found: idIndex=$idIndex, nameIndex=$nameIndex")
+                    // Log available columns
+                    it.columnNames?.let { cols ->
+                        AppLogger.d(TAG, "Available columns: ${cols.joinToString()}")
+                    }
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("AnkiRepository", "getDeckList() failed", e)
+            AppLogger.e(TAG, "getDeckList() failed", e)
         }
-        android.util.Log.i("AnkiRepository", "getDeckList() returning ${decks.size} decks")
+        AppLogger.i(TAG, "getDeckList() returning ${decks.size} decks")
         return decks
     }
 
     fun getCardsToReview(deckId: Long): List<Card> {
-        android.util.Log.i("AnkiRepository", "getCardsToReview(deckId=$deckId) started")
+        AppLogger.i(TAG, "getCardsToReview(deckId=$deckId) started")
         val cards = mutableListOf<Card>()
         
         try {
-            // 1. Get scheduled cards for the deck
+            // Get scheduled cards for the deck
             val selection = "limit=?, deckID=?"
             val selectionArgs = arrayOf("50", deckId.toString())
-            android.util.Log.d("AnkiRepository", "Querying SCHEDULE_URI with selection=$selection")
+            AppLogger.d(TAG, "Querying SCHEDULE_URI=$SCHEDULE_URI with selection=$selection, args=[50, $deckId]")
             val scheduleCursor: Cursor? = contentResolver.query(SCHEDULE_URI, null, selection, selectionArgs, null)
             
             scheduleCursor?.use {
                 val noteIdIndex = it.getColumnIndex(NOTE_ID)
                 val ordIndex = it.getColumnIndex(CARD_ORD)
                 
-                android.util.Log.d("AnkiRepository", "Found ${it.count} scheduled items. noteIdIndex=$noteIdIndex, ordIndex=$ordIndex")
+                AppLogger.d(TAG, "Schedule cursor: count=${it.count}, noteIdIndex=$noteIdIndex, ordIndex=$ordIndex")
+                // Log available columns for debugging
+                it.columnNames?.let { cols ->
+                    AppLogger.d(TAG, "Schedule columns: ${cols.joinToString()}")
+                }
                 
                 if (noteIdIndex != -1 && ordIndex != -1) {
                     while (it.moveToNext()) {
                         val noteId = it.getLong(noteIdIndex)
                         val ord = it.getInt(ordIndex)
+                        AppLogger.d(TAG, "Scheduled card: noteId=$noteId, ord=$ord")
                         
-                        // 2. Fetch details for each card
+                        // Fetch details for each card
                         fetchCardDetails(noteId, ord)?.let { card ->
                             cards.add(card)
                         }
                     }
+                } else {
+                    AppLogger.e(TAG, "Schedule cursor missing expected columns!")
                 }
+            } ?: run {
+                AppLogger.w(TAG, "Schedule cursor is null - AnkiDroid may not be running")
             }
         } catch (e: Exception) {
-            android.util.Log.e("AnkiRepository", "getCardsToReview() failed", e)
+            AppLogger.e(TAG, "getCardsToReview() failed", e)
         }
-        android.util.Log.i("AnkiRepository", "getCardsToReview() returning ${cards.size} cards")
+        AppLogger.i(TAG, "getCardsToReview() returning ${cards.size} cards")
         return cards
     }
 
@@ -109,61 +132,73 @@ class AnkiRepository(private val context: Context) {
                         val front = it.getString(qIndex) ?: ""
                         val back = it.getString(aIndex) ?: ""
                         Card(noteId, front, back, ord)
-                    } else null
+                    } else {
+                        AppLogger.w(TAG, "fetchCardDetails: column not found qIndex=$qIndex, aIndex=$aIndex")
+                        null
+                    }
                 } else null
             }
         } catch (e: Exception) {
-            android.util.Log.e("AnkiRepository", "fetchCardDetails($noteId, $ord) failed", e)
+            AppLogger.e(TAG, "fetchCardDetails($noteId, $ord) failed", e)
             return null
         }
     }
 
+    /**
+     * Answer a card using the official FlashCardsContract.ReviewInfo API.
+     * 
+     * Per the official docs, answering requires putting note_id, ord, answer_ease, 
+     * and time_taken INTO ContentValues (not as selection args), and calling 
+     * update on the schedule URI with null selection.
+     */
     fun answerCard(card: Card, ease: Int, deckId: Long? = null) {
-        android.util.Log.i("AnkiListener", "answerCard: ID=${card.id}, ease=$ease")
+        AppLogger.i(TAG, "answerCard: noteId=${card.id}, ord=${card.ord}, ease=$ease")
         try {
             val values = ContentValues().apply {
-                put("ease", ease)
-                put("time_taken", 1500)
-                // note_id and ord are identifiers, usually kept in selection
+                put(NOTE_ID, card.id)
+                put(CARD_ORD, card.ord)
+                put(EASE_COLUMN, ease)       // "answer_ease", NOT "ease"
+                put(TIME_TAKEN_COLUMN, 5000L) // time_taken in ms
             }
-            val selection = "note_id=? AND ord=?"
-            val selectionArgs = arrayOf(card.id.toString(), card.ord.toString())
-            val rows = contentResolver.update(SCHEDULE_URI, values, selection, selectionArgs)
-            android.util.Log.i("AnkiListener", "answerCard Result: rowsAffected=$rows")
-            if (rows == 0) {
-                android.util.Log.w("AnkiListener", "answerCard: Warning! No rows updated. Card might not be in review queue.")
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("AnkiListener", "answerCard CRASHED", e)
-        }
-    }
-
-    fun buryCard(card: Card, deckId: Long? = null) {
-        android.util.Log.i("AnkiListener", "buryCard: ID=${card.id}")
-        try {
-            val values = ContentValues().apply {
-                put("action", "bury")
-            }
-            val selection = "note_id=? AND ord=?"
-            val selectionArgs = arrayOf(card.id.toString(), card.ord.toString())
-            val rows = contentResolver.update(SCHEDULE_URI, values, selection, selectionArgs)
-            android.util.Log.i("AnkiListener", "buryCard Result: rowsAffected=$rows")
-        } catch (e: Exception) {
-            android.util.Log.e("AnkiListener", "buryCard CRASHED", e)
-        }
-    }
-
-    fun undoReview() {
-        android.util.Log.i("AnkiListener", "undoReview requested")
-        try {
-            val values = ContentValues().apply {
-                put("action", "undo")
-            }
+            AppLogger.d(TAG, "answerCard ContentValues: $values")
             val rows = contentResolver.update(SCHEDULE_URI, values, null, null)
-            android.util.Log.i("AnkiListener", "undoReview Result: rowsAffected=$rows")
+            AppLogger.i(TAG, "answerCard result: rowsAffected=$rows (noteId=${card.id}, ease=$ease)")
+            if (rows == 0) {
+                AppLogger.w(TAG, "answerCard: WARNING - 0 rows updated! Card may not be in review queue.")
+            }
         } catch (e: Exception) {
-            android.util.Log.e("AnkiListener", "undoReview CRASHED", e)
+            AppLogger.e(TAG, "answerCard CRASHED", e)
         }
+    }
+
+    /**
+     * Bury a card using the official FlashCardsContract.ReviewInfo API.
+     * 
+     * Per the official docs, burying requires putting note_id, ord, and buried=1
+     * INTO ContentValues. Do NOT set ease/time_taken when burying.
+     */
+    fun buryCard(card: Card, deckId: Long? = null) {
+        AppLogger.i(TAG, "buryCard: noteId=${card.id}, ord=${card.ord}")
+        try {
+            val values = ContentValues().apply {
+                put(NOTE_ID, card.id)
+                put(CARD_ORD, card.ord)
+                put(BURY_COLUMN, 1)  // "buried" = 1, NOT "action" = "bury"
+            }
+            AppLogger.d(TAG, "buryCard ContentValues: $values")
+            val rows = contentResolver.update(SCHEDULE_URI, values, null, null)
+            AppLogger.i(TAG, "buryCard result: rowsAffected=$rows")
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "buryCard CRASHED", e)
+        }
+    }
+
+    /**
+     * Note: AnkiDroid's ContentProvider API does NOT support undo.
+     * This is a no-op that logs a warning.
+     */
+    fun undoReview() {
+        AppLogger.w(TAG, "undoReview: AnkiDroid ContentProvider API does NOT support undo operations")
     }
 }
 

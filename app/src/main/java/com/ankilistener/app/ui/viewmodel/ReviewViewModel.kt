@@ -10,6 +10,7 @@ import com.ankilistener.app.data.Deck
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
+import com.ankilistener.app.util.AppLogger
 import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
@@ -38,6 +39,10 @@ class ReviewViewModel(
     private val vibrateManager: VibrateManager,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "ReviewVM"
+    }
 
     private val _decks = mutableStateOf<List<Deck>>(emptyList())
     val decks: State<List<Deck>> = _decks
@@ -68,17 +73,22 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     fun loadDecks() {
         viewModelScope.launch {
-            _decks.value = repository.getDeckList()
+            val decks = withContext(Dispatchers.IO) {
+                repository.getDeckList()
+            }
+            _decks.value = decks
         }
     }
 
     fun startReview(deckId: Long) {
         currentDeckId = deckId
-        android.util.Log.i("AnkiListener", "startReview(deckId=$deckId)")
+        AppLogger.i(TAG, "startReview(deckId=$deckId)")
         viewModelScope.launch {
             _reviewState.value = ReviewState.LOADING
-            val cards = repository.getCardsToReview(deckId)
-            android.util.Log.d("AnkiListener", "Fetched ${cards.size} cards for review")
+            val cards = withContext(Dispatchers.IO) {
+                repository.getCardsToReview(deckId)
+            }
+            AppLogger.i(TAG, "Fetched ${cards.size} cards for review")
             settingsRepository.setLastDeckId(deckId)
             _currentCards.value = cards
             _currentIndex.value = 0
@@ -94,7 +104,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private fun showFront() {
         _reviewState.value = ReviewState.FRONT
         currentCard?.let {
-            android.util.Log.d("AnkiListener", "Showing Front: ID=${it.id}")
+            AppLogger.d(TAG, "Showing Front: noteId=${it.id}, ord=${it.ord}, index=${_currentIndex.value}")
             ttsManager.speak(HtmlUtils.extractTtsText(it.front))
         }
     }
@@ -103,7 +113,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _reviewState.value = ReviewState.BACK
         vibrateManager.vibrateShort()
         currentCard?.let {
-            android.util.Log.d("AnkiListener", "Showing Back: ID=${it.id}")
+            AppLogger.d(TAG, "Showing Back: noteId=${it.id}, ord=${it.ord}")
             ttsManager.stop()
             ttsManager.speak(getBackTtsText(it))
         }
@@ -120,7 +130,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private fun nextCard() {
         val oldIndex = _currentIndex.value
         _currentIndex.value++
-        android.util.Log.d("AnkiListener", "nextCard: $oldIndex -> ${_currentIndex.value}")
+        AppLogger.d(TAG, "nextCard: $oldIndex -> ${_currentIndex.value} / ${_currentCards.value.size}")
         if (_currentIndex.value < _currentCards.value.size) {
             showFront()
             prefetchUpcoming()
@@ -131,7 +141,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun buryCurrentCard() {
         currentCard?.let { card ->
-            android.util.Log.i("AnkiListener", "Action: Bury card ID=${card.id}")
+            AppLogger.i(TAG, "Action: Bury card noteId=${card.id}, ord=${card.ord}")
             viewModelScope.launch(Dispatchers.IO) {
                 repository.buryCard(card, currentDeckId)
                 withContext(Dispatchers.Main) {
@@ -143,20 +153,16 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun undoLastAction() {
         if (_currentIndex.value > 0) {
-            android.util.Log.i("AnkiListener", "Action: Undo last review")
+            AppLogger.w(TAG, "Action: Undo - only local navigation back, AnkiDroid API does not support undo")
             vibrateManager.vibrateMedium()
-            viewModelScope.launch(Dispatchers.IO) {
-                repository.undoReview()
-                withContext(Dispatchers.Main) {
-                    _currentIndex.value--
-                    showFront()
-                }
-            }
+            _currentIndex.value--
+            showFront()
+            // Note: repository.undoReview() is a no-op since AnkiDroid API doesn't support undo
         }
     }
 
     private fun finishReview() {
-        android.util.Log.i("AnkiListener", "Review session finished")
+        AppLogger.i(TAG, "Review session finished. Reviewed ${_currentIndex.value} cards.")
         _reviewState.value = ReviewState.FINISHED
         ttsManager.speak("复习完成")
     }
@@ -340,7 +346,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun answerCard(ease: Int) {
         currentCard?.let { card ->
-            android.util.Log.i("AnkiListener", "Action: Answer card ID=${card.id} with ease=$ease")
+            AppLogger.i(TAG, "Action: Answer card noteId=${card.id}, ord=${card.ord}, ease=$ease")
             viewModelScope.launch(Dispatchers.IO) {
                 repository.answerCard(card, ease, currentDeckId)
                 withContext(Dispatchers.Main) {

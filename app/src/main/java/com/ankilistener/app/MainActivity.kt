@@ -21,11 +21,13 @@ import androidx.navigation.compose.rememberNavController
 import com.ankilistener.app.data.AnkiRepository
 import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.ui.screens.DeckSelectionScreen
+import com.ankilistener.app.ui.screens.LogViewerScreen
 import com.ankilistener.app.ui.screens.PermissionScreen
 import com.ankilistener.app.ui.screens.ReviewScreen
 import com.ankilistener.app.ui.screens.SettingsScreen
 import com.ankilistener.app.ui.viewmodel.ReviewViewModel
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
+import com.ankilistener.app.util.AppLogger
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
 
@@ -46,6 +48,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        AppLogger.i("App", "MainActivity.onCreate()")
         
         repository = AnkiRepository(this)
         ttsManager = TtsManager(this)
@@ -79,6 +83,7 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
+                        AppLogger.i("App", "Permission granted, API available")
                         val reviewFactory = object : ViewModelProvider.Factory {
                             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                                 return ReviewViewModel(repository, ttsManager, vibrateManager, settingsRepository) as T
@@ -113,6 +118,9 @@ fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: Vi
                 },
                 onSettingsClick = {
                     navController.navigate("settings")
+                },
+                onLogClick = {
+                    navController.navigate("logs")
                 }
             )
         }
@@ -127,6 +135,13 @@ fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: Vi
         composable("settings") {
             SettingsScreen(
                 viewModel = settingsViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable("logs") {
+            LogViewerScreen(
                 onBack = {
                     navController.popBackStack()
                 }

@@ -61,7 +61,8 @@ fun PermissionScreen(isInstalled: Boolean, onGrantClick: () -> Unit) {
 fun DeckSelectionScreen(
     viewModel: ReviewViewModel, 
     onDeckClick: (Long) -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onLogClick: () -> Unit = {}
 ) {
     val decks by viewModel.decks
     
@@ -74,6 +75,9 @@ fun DeckSelectionScreen(
             TopAppBar(
                 title = { Text("选择牌组") },
                 actions = {
+                    IconButton(onClick = onLogClick) {
+                        Text("📋", fontSize = 20.sp)
+                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
