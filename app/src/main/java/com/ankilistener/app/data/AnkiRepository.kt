@@ -37,107 +37,132 @@ class AnkiRepository(private val context: Context) {
     }
 
     fun getDeckList(): List<Deck> {
+        android.util.Log.i("AnkiRepository", "getDeckList() started")
         val decks = mutableListOf<Deck>()
-        val cursor: Cursor? = contentResolver.query(DECKS_URI, null, null, null, null)
-        cursor?.use {
-            val idIndex = it.getColumnIndex(DECK_ID)
-            val nameIndex = it.getColumnIndex(DECK_NAME)
-            
-            if (idIndex != -1 && nameIndex != -1) {
-                while (it.moveToNext()) {
-                    val id = it.getLong(idIndex)
-                    val name = it.getString(nameIndex)
-                    decks.add(Deck(id, name))
+        try {
+            val cursor: Cursor? = contentResolver.query(DECKS_URI, null, null, null, null)
+            android.util.Log.d("AnkiRepository", "getDeckList() cursor: $cursor")
+            cursor?.use {
+                val idIndex = it.getColumnIndex(DECK_ID)
+                val nameIndex = it.getColumnIndex(DECK_NAME)
+                
+                if (idIndex != -1 && nameIndex != -1) {
+                    while (it.moveToNext()) {
+                        val id = it.getLong(idIndex)
+                        val name = it.getString(nameIndex)
+                        decks.add(Deck(id, name))
+                    }
                 }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("AnkiRepository", "getDeckList() failed", e)
         }
+        android.util.Log.i("AnkiRepository", "getDeckList() returning ${decks.size} decks")
         return decks
     }
 
     fun getCardsToReview(deckId: Long): List<Card> {
+        android.util.Log.i("AnkiRepository", "getCardsToReview(deckId=$deckId) started")
         val cards = mutableListOf<Card>()
         
-        // 1. Get scheduled cards for the deck
-        val selection = "limit=?, deckID=?"
-        val selectionArgs = arrayOf("50", deckId.toString())
-        val scheduleCursor: Cursor? = contentResolver.query(SCHEDULE_URI, null, selection, selectionArgs, null)
-        
-        scheduleCursor?.use {
-            val noteIdIndex = it.getColumnIndex(NOTE_ID)
-            val ordIndex = it.getColumnIndex(CARD_ORD)
+        try {
+            // 1. Get scheduled cards for the deck
+            val selection = "limit=?, deckID=?"
+            val selectionArgs = arrayOf("50", deckId.toString())
+            android.util.Log.d("AnkiRepository", "Querying SCHEDULE_URI with selection=$selection")
+            val scheduleCursor: Cursor? = contentResolver.query(SCHEDULE_URI, null, selection, selectionArgs, null)
             
-            if (noteIdIndex != -1 && ordIndex != -1) {
-                while (it.moveToNext()) {
-                    val noteId = it.getLong(noteIdIndex)
-                    val ord = it.getInt(ordIndex)
-                    
-                    // 2. Fetch details for each card
-                    fetchCardDetails(noteId, ord)?.let { card ->
-                        cards.add(card)
+            scheduleCursor?.use {
+                val noteIdIndex = it.getColumnIndex(NOTE_ID)
+                val ordIndex = it.getColumnIndex(CARD_ORD)
+                
+                android.util.Log.d("AnkiRepository", "Found ${it.count} scheduled items. noteIdIndex=$noteIdIndex, ordIndex=$ordIndex")
+                
+                if (noteIdIndex != -1 && ordIndex != -1) {
+                    while (it.moveToNext()) {
+                        val noteId = it.getLong(noteIdIndex)
+                        val ord = it.getInt(ordIndex)
+                        
+                        // 2. Fetch details for each card
+                        fetchCardDetails(noteId, ord)?.let { card ->
+                            cards.add(card)
+                        }
                     }
                 }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("AnkiRepository", "getCardsToReview() failed", e)
         }
+        android.util.Log.i("AnkiRepository", "getCardsToReview() returning ${cards.size} cards")
         return cards
     }
 
     private fun fetchCardDetails(noteId: Long, ord: Int): Card? {
         val uri = Uri.withAppendedPath(NOTES_URI, "$noteId/cards/$ord")
-        val cursor: Cursor? = contentResolver.query(uri, null, null, null, null)
-        return cursor?.use {
-            if (it.moveToFirst()) {
-                val qIndex = it.getColumnIndex(QUESTION)
-                val aIndex = it.getColumnIndex(ANSWER)
-                if (qIndex != -1 && aIndex != -1) {
-                    val front = it.getString(qIndex) ?: ""
-                    val back = it.getString(aIndex) ?: ""
-                    Card(noteId, front, back, ord)
+        try {
+            val cursor: Cursor? = contentResolver.query(uri, null, null, null, null)
+            return cursor?.use {
+                if (it.moveToFirst()) {
+                    val qIndex = it.getColumnIndex(QUESTION)
+                    val aIndex = it.getColumnIndex(ANSWER)
+                    if (qIndex != -1 && aIndex != -1) {
+                        val front = it.getString(qIndex) ?: ""
+                        val back = it.getString(aIndex) ?: ""
+                        Card(noteId, front, back, ord)
+                    } else null
                 } else null
-            } else null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AnkiRepository", "fetchCardDetails($noteId, $ord) failed", e)
+            return null
         }
     }
 
     fun answerCard(card: Card, ease: Int, deckId: Long? = null) {
+        android.util.Log.i("AnkiListener", "answerCard: ID=${card.id}, ease=$ease")
         try {
             val values = ContentValues().apply {
                 put("ease", ease)
-                put("time_taken", 1000)
-                deckId?.let { put("deck_id", it) }
+                put("time_taken", 1500)
+                // note_id and ord are identifiers, usually kept in selection
             }
             val selection = "note_id=? AND ord=?"
             val selectionArgs = arrayOf(card.id.toString(), card.ord.toString())
             val rows = contentResolver.update(SCHEDULE_URI, values, selection, selectionArgs)
-            android.util.Log.d("AnkiRepository", "answerCard: card=${card.id}, ease=$ease, rowsAffected=$rows")
+            android.util.Log.i("AnkiListener", "answerCard Result: rowsAffected=$rows")
+            if (rows == 0) {
+                android.util.Log.w("AnkiListener", "answerCard: Warning! No rows updated. Card might not be in review queue.")
+            }
         } catch (e: Exception) {
-            android.util.Log.e("AnkiRepository", "answerCard failed", e)
+            android.util.Log.e("AnkiListener", "answerCard CRASHED", e)
         }
     }
 
     fun buryCard(card: Card, deckId: Long? = null) {
+        android.util.Log.i("AnkiListener", "buryCard: ID=${card.id}")
         try {
             val values = ContentValues().apply {
                 put("action", "bury")
-                deckId?.let { put("deck_id", it) }
             }
             val selection = "note_id=? AND ord=?"
             val selectionArgs = arrayOf(card.id.toString(), card.ord.toString())
             val rows = contentResolver.update(SCHEDULE_URI, values, selection, selectionArgs)
-            android.util.Log.d("AnkiRepository", "buryCard: card=${card.id}, rowsAffected=$rows")
+            android.util.Log.i("AnkiListener", "buryCard Result: rowsAffected=$rows")
         } catch (e: Exception) {
-            android.util.Log.e("AnkiRepository", "buryCard failed", e)
+            android.util.Log.e("AnkiListener", "buryCard CRASHED", e)
         }
     }
 
     fun undoReview() {
+        android.util.Log.i("AnkiListener", "undoReview requested")
         try {
             val values = ContentValues().apply {
                 put("action", "undo")
             }
-            // 撤销指令通常不带 note_id，直接对当前牌组队列操作
             val rows = contentResolver.update(SCHEDULE_URI, values, null, null)
-            android.util.Log.d("AnkiRepository", "undoReview rowsAffected=$rows")
+            android.util.Log.i("AnkiListener", "undoReview Result: rowsAffected=$rows")
         } catch (e: Exception) {
-            android.util.Log.e("AnkiRepository", "undoReview failed", e)
+            android.util.Log.e("AnkiListener", "undoReview CRASHED", e)
         }
     }
 }
