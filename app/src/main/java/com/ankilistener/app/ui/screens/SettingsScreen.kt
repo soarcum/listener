@@ -164,42 +164,36 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 
                 // Prefetch count slider
                 item {
-                    var sliderValue by remember(ttsSettings.prefetchCount) {
-                        mutableStateOf(ttsSettings.prefetchCount.toFloat())
+                    var textValue by remember(ttsSettings.prefetchCount) {
+                        mutableStateOf(ttsSettings.prefetchCount.toString())
                     }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("预加载卡片数", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "${sliderValue.roundToInt()} 张",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                    TtsTextField(
+                        label = "预加载卡片数",
+                        value = textValue,
+                        placeholder = "3",
+                        keyboardType = KeyboardType.Number,
+                        onValueChange = { newValue ->
+                            // Allow digits only
+                            if (newValue.all { it.isDigit() }) {
+                                textValue = newValue
+                                val count = newValue.toIntOrNull()
+                                if (count != null) {
+                                    viewModel.updatePrefetchCount(count)
+                                } else if (newValue.isEmpty()) {
+                                    viewModel.updatePrefetchCount(0)
+                                }
+                            }
                         }
-                        Slider(
-                            value = sliderValue,
-                            onValueChange = { sliderValue = it },
-                            onValueChangeFinished = {
-                                viewModel.updatePrefetchCount(sliderValue.roundToInt())
-                            },
-                            valueRange = 0f..10f,
-                            steps = 9
-                        )
-                        Text(
-                            "提前下载接下来的卡片音频，0 = 不预加载",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    )
+
+                    Text(
+                        "提前下载接下来的卡片音频，0 = 不预加载",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
                 }
+
 
                 // Cache stats
                 item {

@@ -116,8 +116,9 @@ class SettingsRepository(context: Context) {
     }
 
     fun setPrefetchCount(count: Int) {
-        ttsPrefs.edit().putInt("prefetch_count", count.coerceIn(0, 20)).apply()
+        ttsPrefs.edit().putInt("prefetch_count", count.coerceAtLeast(0)).apply()
     }
+
 
     fun getSkipQuestionOnBack(): Boolean {
         return ttsPrefs.getBoolean("skip_question_on_back", false)
