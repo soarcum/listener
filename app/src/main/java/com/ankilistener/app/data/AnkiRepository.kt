@@ -98,13 +98,42 @@ class AnkiRepository(private val context: Context) {
     }
 
     fun answerCard(card: Card, ease: Int) {
-        val values = ContentValues().apply {
-            put(NOTE_ID, card.id)
-            put(CARD_ORD, card.ord)
-            put("ease", ease)
-            put("time_taken", 0)
+        try {
+            val values = ContentValues().apply {
+                put("note_id", card.id)
+                put("ord", card.ord)
+                put("ease", ease)
+                put("time_taken", 0)
+            }
+            contentResolver.update(SCHEDULE_URI, values, null, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        contentResolver.update(SCHEDULE_URI, values, null, null)
+    }
+
+    fun buryCard(card: Card) {
+        try {
+            val values = ContentValues().apply {
+                put("note_id", card.id)
+                put("ord", card.ord)
+                put("action", "bury")
+            }
+            contentResolver.update(SCHEDULE_URI, values, null, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun undoReview() {
+        try {
+            val values = ContentValues().apply {
+                put("action", "undo")
+            }
+            // 撤销指令通常不带 note_id，直接对当前牌组队列操作
+            contentResolver.update(SCHEDULE_URI, values, null, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
 

@@ -13,8 +13,10 @@ import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class ReviewState {
     FRONT, BACK, FINISHED, LOADING
@@ -119,20 +121,26 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         }
     }
 
-    private fun skipCurrentCard() {
-        val cards = _currentCards.value.toMutableList()
-        val currentIdx = _currentIndex.value
-        if (currentIdx < cards.size) {
-            // 从当前队列中移除，实现“本次会话不再出现”
-            cards.removeAt(currentIdx)
-            _currentCards.value = cards
-            
-            // 索引不需要增加，因为后面的卡片已经顶上来了
-            if (currentIdx < cards.size) {
-                showFront()
-                prefetchUpcoming()
-            } else {
-                finishReview()
+    private fun buryCurrentCard() {
+        currentCard?.let { card ->
+            viewModelScope.launch(Dispatchers.IO) {
+                repository.buryCard(card)
+                withContext(Dispatchers.Main) {
+                    nextCard()
+                }
+            }
+        }
+    }
+
+    private fun undoLastAction() {
+        if (_currentIndex.value > 0) {
+            vibrateManager.vibrateMedium()
+            viewModelScope.launch(Dispatchers.IO) {
+                repository.undoReview()
+                withContext(Dispatchers.Main) {
+                    _currentIndex.value--
+                    showFront()
+                }
             }
         }
     }
@@ -309,17 +317,13 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             GestureAction.ANSWER_EASY -> answerCardWithEase(AnkiRepository.EASE_EASY)
             GestureAction.SKIP -> {
                 vibrateManager.vibrateShort()
-                skipCurrentCard()
+                buryCurrentCard()
             }
             GestureAction.MARK -> {
                 vibrateManager.vibrateDoubleShort()
             }
             GestureAction.UNDO -> {
-                if (_currentIndex.value > 0) {
-                    vibrateManager.vibrateMedium()
-                    _currentIndex.value--
-                    showFront()
-                }
+                undoLastAction()
             }
         }
     }
