@@ -64,6 +64,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     val prefetchStatus: State<PrefetchStatus> = _prefetchStatus
 
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
+    private var currentDeckId: Long? = null
 
     fun loadDecks() {
         viewModelScope.launch {
@@ -72,6 +73,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     }
 
     fun startReview(deckId: Long) {
+        currentDeckId = deckId
         viewModelScope.launch {
             _reviewState.value = ReviewState.LOADING
             val cards = repository.getCardsToReview(deckId)
@@ -124,7 +126,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private fun buryCurrentCard() {
         currentCard?.let { card ->
             viewModelScope.launch(Dispatchers.IO) {
-                repository.buryCard(card)
+                repository.buryCard(card, currentDeckId)
                 withContext(Dispatchers.Main) {
                     nextCard()
                 }
@@ -152,17 +154,12 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     // ---- Prefetch logic ----
 
-    /**
-     * Prefetch audio for upcoming cards (front + back).
-     * The number of cards to prefetch is read from settings.
-     */
     private fun prefetchUpcoming() {
         viewModelScope.launch {
             val prefetchCount = settingsRepository.getPrefetchCount()
             val cards = _currentCards.value
             val currentIdx = _currentIndex.value
 
-            // Prefetch from current card to (current + prefetchCount)
             val endIdx = (currentIdx + prefetchCount).coerceAtMost(cards.size)
             for (i in currentIdx until endIdx) {
                 val card = cards[i]
@@ -172,15 +169,11 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 ttsManager.prefetch(backText)
             }
 
-            // Update status after a short delay to let downloads start
             delay(500)
             updatePrefetchStatus()
         }
     }
 
-    /**
-     * Recalculate and update the prefetch status for the UI.
-     */
     fun updatePrefetchStatus() {
         val cards = _currentCards.value
         val prefetchCount = settingsRepository.getPrefetchCount()
@@ -248,15 +241,12 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         
         if (actionsForGesture.isEmpty()) return
 
-        // 根据当前状态选择最合适的动作 (互斥逻辑)
         val action = when (_reviewState.value) {
             ReviewState.FRONT -> {
-                // 优先执行"显示答案"，其次是通用的 TTS/跳过/标记/撤销
                 actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
             }
             ReviewState.BACK -> {
-                // 优先执行"评分"，其次是通用的 TTS/跳过/标记/撤销
                 actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
             }
@@ -289,7 +279,6 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         }
         
         _gestureFeedback.value = FeedbackEvent("$gestureName ($actionName)")
-
         executeAction(action)
     }
 
@@ -341,9 +330,13 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     }
 
     private fun answerCard(ease: Int) {
-        currentCard?.let {
-            repository.answerCard(it, ease)
-            nextCard()
+        currentCard?.let { card ->
+            viewModelScope.launch(Dispatchers.IO) {
+                repository.answerCard(card, ease, currentDeckId)
+                withContext(Dispatchers.Main) {
+                    nextCard()
+                }
+            }
         }
     }
 

@@ -97,30 +97,34 @@ class AnkiRepository(private val context: Context) {
         }
     }
 
-    fun answerCard(card: Card, ease: Int) {
+    fun answerCard(card: Card, ease: Int, deckId: Long? = null) {
         try {
             val values = ContentValues().apply {
-                put("note_id", card.id)
-                put("ord", card.ord)
                 put("ease", ease)
-                put("time_taken", 0)
+                put("time_taken", 1000)
+                deckId?.let { put("deck_id", it) }
             }
-            contentResolver.update(SCHEDULE_URI, values, null, null)
+            val selection = "note_id=? AND ord=?"
+            val selectionArgs = arrayOf(card.id.toString(), card.ord.toString())
+            val rows = contentResolver.update(SCHEDULE_URI, values, selection, selectionArgs)
+            android.util.Log.d("AnkiRepository", "answerCard: card=${card.id}, ease=$ease, rowsAffected=$rows")
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("AnkiRepository", "answerCard failed", e)
         }
     }
 
-    fun buryCard(card: Card) {
+    fun buryCard(card: Card, deckId: Long? = null) {
         try {
             val values = ContentValues().apply {
-                put("note_id", card.id)
-                put("ord", card.ord)
                 put("action", "bury")
+                deckId?.let { put("deck_id", it) }
             }
-            contentResolver.update(SCHEDULE_URI, values, null, null)
+            val selection = "note_id=? AND ord=?"
+            val selectionArgs = arrayOf(card.id.toString(), card.ord.toString())
+            val rows = contentResolver.update(SCHEDULE_URI, values, selection, selectionArgs)
+            android.util.Log.d("AnkiRepository", "buryCard: card=${card.id}, rowsAffected=$rows")
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("AnkiRepository", "buryCard failed", e)
         }
     }
 
@@ -130,9 +134,10 @@ class AnkiRepository(private val context: Context) {
                 put("action", "undo")
             }
             // 撤销指令通常不带 note_id，直接对当前牌组队列操作
-            contentResolver.update(SCHEDULE_URI, values, null, null)
+            val rows = contentResolver.update(SCHEDULE_URI, values, null, null)
+            android.util.Log.d("AnkiRepository", "undoReview rowsAffected=$rows")
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("AnkiRepository", "undoReview failed", e)
         }
     }
 }
