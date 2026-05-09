@@ -24,39 +24,51 @@ if ($versionNameMatch.Success) {
     $minor = $versionNameMatch.Groups[2].Value
     $patch = [int]$versionNameMatch.Groups[3].Value + 1
     $newVersionName = "$major.$minor.$patch"
-    $content = $content -replace "versionName\s+`"$major.$minor.$patch`"", "versionName `"$newVersionName`""
+    $oldVersionPattern = [regex]::Escape("$major.$minor.$patch")
+    $content = $content -replace "versionName\s+`"$oldVersionPattern`"", "versionName `"$newVersionName`""
 }
-$content | Set-Content $gradleFile -NoNewline -Encoding UTF8
+# 关键修复：保存为不带 BOM 的 UTF-8
+$Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+[System.IO.File]::WriteAllText((Resolve-Path $gradleFile), $content, $Utf8NoBomEncoding)
 Write-Host "✅ 版本号已更新为: $newVersionName ($newCode)"
 
 # 2. 提交并推送
 git add .
 git commit -m "chore: bump version to $newVersionName and auto commit"
+$currentSha = (git rev-parse HEAD).Trim()
+$currentSha | Set-Content .last_commit_sha -NoNewline
 git push
 ```
 
 ## 步骤 2：监听 GitHub Actions 打包状态
-使用项目根目录下的 .github_token 来调用 GitHub API，轮询检查最近一次运行的工作流状态。如果失败，将自动抓取最后 50 行日志以供分析。
+使用项目根目录下的 .github_token 来调用 GitHub API，轮询检查匹配本次提交 SHA 的工作流状态。如果失败，将自动抓取最后 50 行日志以供分析。
 // turbo
 ```powershell
 $token = (Get-Content .github_token).Trim()
 $repo = "slowpack/listener"
-$url = "https://api.github.com/repos/$repo/actions/runs?per_page=1"
+$targetSha = (Get-Content .last_commit_sha).Trim()
+$url = "https://api.github.com/repos/$repo/actions/runs?per_page=5"
 
-Write-Host "正在获取最近一次的 GitHub Actions 运行记录..."
+Write-Host "正在等待提交 ($($targetSha.Substring(0,7))) 的 GitHub Actions 运行记录..."
 
 while ($true) {
     $response = curl.exe -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer $token" $url | ConvertFrom-Json
     
-    if ($null -eq $response -or $null -eq $response.workflow_runs -or $response.workflow_runs.Count -eq 0) {
-        Write-Host "❌ 未找到任何工作流运行记录，请检查仓库名称或 Token 权限。"
-        exit 1
+    # 查找匹配当前 SHA 的运行记录
+    $run = $response.workflow_runs | Where-Object { $_.head_sha -eq $targetSha } | Select-Object -First 1
+    
+    if ($null -eq $run) {
+        Write-Host "等待任务启动..."
+        Start-Sleep -Seconds 5
+        continue
     }
     
-    $run = $response.workflow_runs[0]
     $runId = $run.id
     
     if ($run.status -eq "completed") {
+        # 清理临时文件
+        if (Test-Path .last_commit_sha) { Remove-Item .last_commit_sha }
+        
         if ($run.conclusion -eq "success") {
             Write-Host "🎉 打包成功完成！"
             Write-Host "🔗 产物下载或详情: $($run.html_url)"
