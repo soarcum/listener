@@ -129,10 +129,13 @@ class AnkiRepository(private val context: Context) {
                 if (it.moveToFirst()) {
                     val qIndex = it.getColumnIndex(QUESTION)
                     val aIndex = it.getColumnIndex(ANSWER)
+                    val tIndex = it.getColumnIndex(TAGS)
                     if (qIndex != -1 && aIndex != -1) {
                         val front = it.getString(qIndex) ?: ""
                         val back = it.getString(aIndex) ?: ""
-                        Card(noteId, front, back, ord)
+                        val tags = if (tIndex != -1) it.getString(tIndex) ?: "" else ""
+                        val isMarked = tags.split("\\s+".toRegex()).any { tag -> tag.equals("marked", ignoreCase = true) }
+                        Card(noteId, front, back, ord, isMarked)
                     } else {
                         AppLogger.w(TAG, "fetchCardDetails: column not found qIndex=$qIndex, aIndex=$aIndex")
                         null
@@ -199,9 +202,12 @@ class AnkiRepository(private val context: Context) {
      *
      * AnkiDroid requires updating notes through data URI (notes/{noteId}),
      * not via selection args. Anki's standard "mark" is the "marked" tag.
+     *
+     * @return The new mark status (true if marked, false if unmarked)
      */
-    fun markCard(card: Card) {
+    fun markCard(card: Card): Boolean {
         AppLogger.i(TAG, "markCard: noteId=${card.id}")
+        var isMarkedAfter = false
         try {
             val noteUri = Uri.withAppendedPath(NOTES_URI, card.id.toString())
 
@@ -225,9 +231,11 @@ class AnkiRepository(private val context: Context) {
             if (alreadyMarked) {
                 tagList.removeAll { it.equals("marked", ignoreCase = true) }
                 AppLogger.i(TAG, "markCard: removing 'marked' tag")
+                isMarkedAfter = false
             } else {
                 tagList.add("marked")
                 AppLogger.i(TAG, "markCard: adding 'marked' tag")
+                isMarkedAfter = true
             }
 
             val newTags = tagList.joinToString(" ")
@@ -241,6 +249,7 @@ class AnkiRepository(private val context: Context) {
         } catch (e: Exception) {
             AppLogger.e(TAG, "markCard CRASHED", e)
         }
+        return isMarkedAfter
     }
 
     /**
@@ -253,4 +262,4 @@ class AnkiRepository(private val context: Context) {
 }
 
 data class Deck(val id: Long, val name: String)
-data class Card(val id: Long, val front: String, val back: String, val ord: Int)
+data class Card(val id: Long, val front: String, val back: String, val ord: Int, val isMarked: Boolean = false)

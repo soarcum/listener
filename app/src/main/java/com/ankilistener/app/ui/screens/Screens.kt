@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -189,6 +191,23 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         lineHeight = (30 * fontScale).sp
                     )
                 }
+            }
+        }
+
+        // Mark Button (subtle flag icon at top right)
+        card?.let {
+            IconButton(
+                onClick = { viewModel.toggleMark() },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = if (it.isMarked) Icons.Default.Flag else Icons.Outlined.Flag,
+                    contentDescription = "Mark Card",
+                    tint = if (it.isMarked) Color.Red.copy(alpha = 0.5f) else Color.Gray.copy(alpha = 0.3f),
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
 

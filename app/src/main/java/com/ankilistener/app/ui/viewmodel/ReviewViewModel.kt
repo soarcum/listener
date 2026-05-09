@@ -167,6 +167,23 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         ttsManager.speak("复习完成")
     }
 
+    fun toggleMark() {
+        currentCard?.let { card ->
+            AppLogger.i(TAG, "Action: Toggle mark card noteId=${card.id}")
+            viewModelScope.launch(Dispatchers.IO) {
+                val newMarkedStatus = repository.markCard(card)
+                withContext(Dispatchers.Main) {
+                    // Update the card in our list to reflect the new status
+                    val updatedCards = _currentCards.value.toMutableList()
+                    updatedCards[_currentIndex.value] = card.copy(isMarked = newMarkedStatus)
+                    _currentCards.value = updatedCards
+                    
+                    vibrateManager.vibrateDoubleShort()
+                }
+            }
+        }
+    }
+
     // ---- Prefetch logic ----
 
     private fun prefetchUpcoming() {
@@ -259,11 +276,11 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         val action = when (_reviewState.value) {
             ReviewState.FRONT -> {
                 actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
-                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.UNDO }
             }
             ReviewState.BACK -> {
                 actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
-                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.MARK || it == GestureAction.UNDO }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.UNDO }
             }
             else -> null
         } ?: return
@@ -324,13 +341,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 buryCurrentCard()
             }
             GestureAction.MARK -> {
-                vibrateManager.vibrateDoubleShort()
-                currentCard?.let { card ->
-                    AppLogger.i(TAG, "Action: Mark card noteId=${card.id}")
-                    viewModelScope.launch(Dispatchers.IO) {
-                        repository.markCard(card)
-                    }
-                }
+                toggleMark()
             }
             GestureAction.UNDO -> {
                 undoLastAction()

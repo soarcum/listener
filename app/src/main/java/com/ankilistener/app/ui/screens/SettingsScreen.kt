@@ -290,7 +290,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 )
             }
 
-            items(GestureAction.values().filter { it != GestureAction.NONE }) { action ->
+            items(GestureAction.values().filter { it != GestureAction.NONE && it != GestureAction.MARK }) { action ->
                 val currentGesture = mappings[action] ?: GestureType.NONE
                 ActionSettingItem(
                     action = action,
@@ -393,7 +393,7 @@ private fun getActionName(action: GestureAction): String {
         GestureAction.ANSWER_GOOD -> "良好 (背面有效)"
         GestureAction.ANSWER_EASY -> "简单 (背面有效)"
         GestureAction.SKIP -> "跳过"
-        GestureAction.MARK -> "标记"
+        GestureAction.MARK -> "标记 (已移至卡片按钮)"
         GestureAction.UNDO -> "撤销"
     }
 }
