@@ -325,6 +325,12 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             }
             GestureAction.MARK -> {
                 vibrateManager.vibrateDoubleShort()
+                currentCard?.let { card ->
+                    AppLogger.i(TAG, "Action: Mark card noteId=${card.id}")
+                    viewModelScope.launch(Dispatchers.IO) {
+                        repository.markCard(card)
+                    }
+                }
             }
             GestureAction.UNDO -> {
                 undoLastAction()

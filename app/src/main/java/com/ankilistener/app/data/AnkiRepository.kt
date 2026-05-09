@@ -26,6 +26,7 @@ class AnkiRepository(private val context: Context) {
         const val CARD_ORD = "ord"
         const val QUESTION = "question"
         const val ANSWER = "answer"
+        const val FLAGS = "flags"
         
         // ReviewInfo write-only columns (official names)
         const val EASE_COLUMN = "answer_ease"    // NOT "ease"!
@@ -190,6 +191,23 @@ class AnkiRepository(private val context: Context) {
             AppLogger.i(TAG, "buryCard result: rowsAffected=$rows")
         } catch (e: Exception) {
             AppLogger.e(TAG, "buryCard CRASHED", e)
+        }
+    }
+
+    /**
+     * Mark a card by setting a Red Flag (Flag 1) in AnkiDroid.
+     */
+    fun markCard(card: Card) {
+        AppLogger.i(TAG, "markCard: noteId=${card.id}")
+        try {
+            val values = ContentValues().apply {
+                put(FLAGS, 1) // 1 = Red, 2 = Orange, 3 = Green, 4 = Blue, etc.
+            }
+            // Update the note using its ID
+            val rows = contentResolver.update(NOTES_URI, values, "id=?", arrayOf(card.id.toString()))
+            AppLogger.i(TAG, "markCard result: rowsAffected=$rows")
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "markCard CRASHED", e)
         }
     }
 
