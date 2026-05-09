@@ -26,7 +26,7 @@ class AnkiRepository(private val context: Context) {
         const val CARD_ORD = "ord"
         const val QUESTION = "question"
         const val ANSWER = "answer"
-        const val FLAGS = "flags"
+        const val TAGS = "tags"
         
         // ReviewInfo write-only columns (official names)
         const val EASE_COLUMN = "answer_ease"    // NOT "ease"!
@@ -195,17 +195,49 @@ class AnkiRepository(private val context: Context) {
     }
 
     /**
-     * Mark a card by setting a Red Flag (Flag 1) in AnkiDroid.
+     * Mark a note by adding the "marked" tag via AnkiDroid's ContentProvider.
+     *
+     * AnkiDroid requires updating notes through data URI (notes/{noteId}),
+     * not via selection args. Anki's standard "mark" is the "marked" tag.
      */
     fun markCard(card: Card) {
         AppLogger.i(TAG, "markCard: noteId=${card.id}")
         try {
-            val values = ContentValues().apply {
-                put(FLAGS, 1) // 1 = Red, 2 = Orange, 3 = Green, 4 = Blue, etc.
+            val noteUri = Uri.withAppendedPath(NOTES_URI, card.id.toString())
+
+            // 1. Read current tags
+            val cursor = contentResolver.query(noteUri, arrayOf(TAGS), null, null, null)
+            var currentTags = ""
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val tagsIndex = it.getColumnIndex(TAGS)
+                    if (tagsIndex != -1) {
+                        currentTags = it.getString(tagsIndex) ?: ""
+                    }
+                }
             }
-            // Update the note using its ID
-            val rows = contentResolver.update(NOTES_URI, values, "id=?", arrayOf(card.id.toString()))
-            AppLogger.i(TAG, "markCard result: rowsAffected=$rows")
+            AppLogger.d(TAG, "markCard: currentTags='$currentTags'")
+
+            // 2. Toggle: add "marked" if absent, remove if present
+            val tagList = currentTags.split("\\s+".toRegex()).filter { it.isNotBlank() }.toMutableList()
+            val alreadyMarked = tagList.any { it.equals("marked", ignoreCase = true) }
+
+            if (alreadyMarked) {
+                tagList.removeAll { it.equals("marked", ignoreCase = true) }
+                AppLogger.i(TAG, "markCard: removing 'marked' tag")
+            } else {
+                tagList.add("marked")
+                AppLogger.i(TAG, "markCard: adding 'marked' tag")
+            }
+
+            val newTags = tagList.joinToString(" ")
+            val values = ContentValues().apply {
+                put(TAGS, newTags)
+            }
+
+            // 3. Update via note-specific data URI
+            val rows = contentResolver.update(noteUri, values, null, null)
+            AppLogger.i(TAG, "markCard result: rowsAffected=$rows, newTags='$newTags', wasMarked=$alreadyMarked")
         } catch (e: Exception) {
             AppLogger.e(TAG, "markCard CRASHED", e)
         }
