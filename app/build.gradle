@@ -1,4 +1,4 @@
-// Trigger build - previous run was cancelled by GitHub Actions platform incident
+﻿// Trigger build - previous run was cancelled by GitHub Actions platform incident
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
@@ -12,7 +12,7 @@ android {
         applicationId "com.ankilistener.app"
         minSdk 24
         targetSdk 34
-        versionCode 19
+        versionCode 20
         versionName "1.0.12"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
