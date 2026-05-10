@@ -34,6 +34,11 @@ class SettingsRepository(context: Context) {
     private val ttsPrefs: SharedPreferences = context.getSharedPreferences("tts_prefs", Context.MODE_PRIVATE)
     private val aiPrefs: SharedPreferences = context.getSharedPreferences("ai_prefs_v1", Context.MODE_PRIVATE)
 
+    companion object {
+        const val DEFAULT_BASE_URL = "http://172.22.64.1:3000"
+        const val DEFAULT_AI_ENDPOINT = "http://172.22.64.1:3000/api/anki-listener/answer"
+    }
+
     // ---- Gesture Settings ----
 
     fun getGesture(action: GestureAction): GestureType {
@@ -81,7 +86,7 @@ class SettingsRepository(context: Context) {
     }
 
     fun getTtsBaseUrl(): String {
-        return ttsPrefs.getString("tts_base_url", "http://172.22.64.1:3000") ?: "http://172.22.64.1:3000"
+        return ttsPrefs.getString("tts_base_url", DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
     }
 
     fun setTtsBaseUrl(url: String) {
@@ -176,8 +181,8 @@ class SettingsRepository(context: Context) {
     fun getAiEndpoint(): String {
         return aiPrefs.getString(
             "endpoint",
-            "http://172.22.64.1:3000/api/anki-listener/answer"
-        ) ?: "http://172.22.64.1:3000/api/anki-listener/answer"
+            DEFAULT_AI_ENDPOINT
+        ) ?: DEFAULT_AI_ENDPOINT
     }
 
     fun setAiEndpoint(endpoint: String) {

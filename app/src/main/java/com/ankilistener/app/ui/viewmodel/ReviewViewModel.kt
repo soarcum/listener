@@ -269,7 +269,6 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
         _conceptReviewResults.value = _conceptReviewResults.value + (concept.id to ease)
 
-        // Vibrate based on ease
         when (ease) {
             ConceptReviewState.EASE_AGAIN -> vibrateManager.vibrateLong()
             ConceptReviewState.EASE_HARD -> vibrateManager.vibrateMedium()
@@ -277,7 +276,6 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             ConceptReviewState.EASE_EASY -> vibrateManager.vibrateShort()
         }
 
-        // Next concept or back to main card
         val nextIdx = _currentConceptIndex.value + 1
         if (nextIdx < _dueConceptQueue.value.size) {
             _currentConceptIndex.value = nextIdx

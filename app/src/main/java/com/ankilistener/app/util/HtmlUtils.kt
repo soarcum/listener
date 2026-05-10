@@ -60,7 +60,6 @@ object HtmlUtils {
                     is BackgroundColorSpan -> addStyle(SpanStyle(background = Color(span.backgroundColor)), start, end)
                     is StrikethroughSpan -> addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), start, end)
                     is AbsoluteSizeSpan -> {
-                        // AbsoluteSizeSpan is in pixels or dip. We'll treat it as sp for simplicity in Compose
                         addStyle(SpanStyle(fontSize = span.size.sp), start, end)
                     }
                     is RelativeSizeSpan -> {
@@ -78,17 +77,12 @@ object HtmlUtils {
         return parseHtml(text).toString()
     }
 
-    private val CONCEPT_BLOCK_REGEX = Regex(
-        "<!--\\s*ankilistener:concepts:v1\\s*\\{.*?}\\s*-->",
-        RegexOption.DOT_MATCHES_ALL
-    )
-
     /**
      * Removes ankilistener:concepts:v1 JSON comment blocks from HTML.
      * Used for display and TTS so the raw JSON is not shown or spoken.
      */
     fun removeAnkiListenerConceptBlocks(html: String): String {
-        return html.replace(CONCEPT_BLOCK_REGEX, "")
+        return ConceptCardParser.stripBlocks(html)
     }
 
     /**

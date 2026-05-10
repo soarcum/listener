@@ -12,7 +12,7 @@ import com.ankilistener.app.util.TtsProvider
 
 data class TtsSettings(
     val provider: TtsProvider = TtsProvider.SYSTEM,
-    val baseUrl: String = "http://172.22.64.1:3000",
+    val baseUrl: String = SettingsRepository.DEFAULT_BASE_URL,
     val speed: String = "1.0",
     val delay: String = "5",
     val voice: String = "zh_female_wenroutaozi_uranus_bigtts",
@@ -22,7 +22,7 @@ data class TtsSettings(
 
 data class AiAnswerSettings(
     val enabled: Boolean = false,
-    val endpoint: String = "http://172.22.64.1:3000/api/anki-listener/answer",
+    val endpoint: String = SettingsRepository.DEFAULT_AI_ENDPOINT,
     val apiKey: String = "",
     val model: String = "default",
     val followUpEnabled: Boolean = true

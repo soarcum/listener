@@ -2,7 +2,7 @@ package com.ankilistener.app.data
 
 data class AiSettings(
     val enabled: Boolean = false,
-    val endpoint: String = "http://172.22.64.1:3000/api/anki-listener/answer",
+    val endpoint: String = SettingsRepository.DEFAULT_AI_ENDPOINT,
     val apiKey: String = "",
     val model: String = "default",
     val followUpEnabled: Boolean = true

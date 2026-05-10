@@ -295,7 +295,10 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
             }
         }
 
-        val lastFeedbackMessage = gestureFeedback?.message.orEmpty()
+        var lastFeedbackMessage by remember { mutableStateOf("") }
+        if (gestureFeedback != null) {
+            lastFeedbackMessage = gestureFeedback?.message ?: ""
+        }
 
         AnimatedVisibility(
             visible = gestureFeedback != null,

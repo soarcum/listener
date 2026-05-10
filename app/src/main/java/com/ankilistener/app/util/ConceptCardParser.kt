@@ -10,6 +10,12 @@ object ConceptCardParser {
         "<!--\\s*ankilistener:concepts:v1\\s*(\\{.*?})\\s*-->",
         RegexOption.DOT_MATCHES_ALL
     )
+    private val STRIP_REGEX = Regex(
+        "<!--\\s*ankilistener:concepts:v1\\s*\\{.*?}\\s*-->",
+        RegexOption.DOT_MATCHES_ALL
+    )
+
+    fun stripBlocks(html: String): String = html.replace(STRIP_REGEX, "")
 
     fun parse(html: String, noteId: Long, ord: Int): List<ConceptCard> {
         val match = BLOCK_REGEX.find(html) ?: return emptyList()
