@@ -20,6 +20,9 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
+    - name: Clean Gradle build cache
+      run: rm -rf ~/.gradle/caches/build-cache-1
+
     - name: Build with Gradle
       run: gradle assembleDebug
 
