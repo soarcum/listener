@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.ankilistener.app.util.AppLogger
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LogViewerScreen(onBack: () -> Unit) {
     var entries by remember { mutableStateOf(AppLogger.getEntries()) }

@@ -151,10 +151,13 @@ object AppLogger {
         // Clear persisted file
         logFile?.let { file ->
             try {
-                if (file.exists()) file.writeText("")
+                if (file.exists()) {
+                    file.writeText("")
+                }
             } catch (e: Exception) {
                 Log.e("AppLogger", "Failed to clear log file", e)
             }
+            Unit
         }
         notifyListeners()
     }
