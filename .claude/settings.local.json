@@ -1,12 +1,35 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git status *)",
-      "Bash(cd C:/Users/Administrator/Desktop/cool/listener && git diff --no-index /dev/null app/src/main/java/com/ankilistener/app/data/ConceptCardModels.kt 2>&1 | head -20)",
+      "Bash(git *)",
+      "Bash(cd * && git *)",
+      "Bash(curl *)",
+      "Bash(cat *)",
+      "Bash(powershell *)",
+      "Bash(pwsh *)",
+      "Bash(rm *)",
+      "Bash(ls *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(awk *)",
+      "Bash(sed *)",
+      "Bash(wc *)",
+      "Bash(echo *)",
+      "Bash(date *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(find *)",
+      "Bash(gradle *)",
+      "Bash(./gradlew *)",
+      "Bash(python3 *)",
+      "Bash(pip *)",
+      "Bash(adb *)",
       "Read(//dev/**)",
+      "Read(//c/Users/Administrator/**)",
       "WebSearch",
-      "Bash(ls ~/.claude/ 2>/dev/null)",
-      "Read(//c/Users/Administrator/.claude/**)"
+      "WebFetch"
     ],
     "additionalDirectories": [
       "C:\\Users\\Administrator\\.claude"

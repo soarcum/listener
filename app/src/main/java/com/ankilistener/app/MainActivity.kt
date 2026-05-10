@@ -6,11 +6,29 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -33,6 +51,8 @@ import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.AudioAnswerRecorder
 import com.ankilistener.app.util.AppLogger
 import com.ankilistener.app.util.TtsManager
+import com.ankilistener.app.util.UpdateInfo
+import com.ankilistener.app.util.UpdateManager
 import com.ankilistener.app.util.VibrateManager
 
 class MainActivity : ComponentActivity() {
@@ -56,9 +76,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         AppLogger.i("App", "MainActivity.onCreate()")
-        
+
         repository = AnkiRepository(this)
         ttsManager = TtsManager(this)
         vibrateManager = VibrateManager(this)
@@ -124,10 +144,74 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun UpdateDialog(updateInfo: UpdateInfo, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "New Version Available",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column {
+                Text("AnkiListener v${updateInfo.version}")
+                if (updateInfo.body.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = updateInfo.body,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                UpdateManager.downloadAndInstall(context, updateInfo.downloadUrl, updateInfo.version)
+                onDismiss()
+            }) {
+                Text("Update")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Later")
+            }
+        }
+    )
+}
+
+@Composable
 fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: ViewModelProvider.Factory) {
     val navController = rememberNavController()
     val viewModel: ReviewViewModel = viewModel(factory = reviewFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory)
+    val context = LocalContext.current
+
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val info = UpdateManager.checkForUpdate(context)
+            if (info != null) {
+                AppLogger.i("UpdateManager", "Update available: ${info.version}")
+                updateInfo = info
+            }
+        } catch (e: Exception) {
+            AppLogger.e("UpdateManager", "Update check failed: ${e.message}")
+        }
+    }
+
+    updateInfo?.let { info ->
+        UpdateDialog(
+            updateInfo = info,
+            onDismiss = { updateInfo = null }
+        )
+    }
 
     NavHost(navController = navController, startDestination = "deck_selection") {
         composable("deck_selection") {
