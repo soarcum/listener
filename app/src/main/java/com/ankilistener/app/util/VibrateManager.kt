@@ -7,12 +7,12 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 class VibrateManager(context: Context) {
-    private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-        vibratorManager.defaultVibrator
+    private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+        vibratorManager?.defaultVibrator
     } else {
         @Suppress("DEPRECATION")
-        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
     }
 
     fun vibrateShort() {
@@ -22,10 +22,10 @@ class VibrateManager(context: Context) {
     fun vibrateDoubleShort() {
         val pattern = longArrayOf(0, 50, 50, 50)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            vibrator?.vibrate(VibrationEffect.createWaveform(pattern, -1))
         } else {
             @Suppress("DEPRECATION")
-            vibrator.vibrate(pattern, -1)
+            vibrator?.vibrate(pattern, -1)
         }
     }
 
@@ -39,10 +39,10 @@ class VibrateManager(context: Context) {
 
     private fun vibrate(duration: Long) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+            vibrator?.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
         } else {
             @Suppress("DEPRECATION")
-            vibrator.vibrate(duration)
+            vibrator?.vibrate(duration)
         }
     }
 }

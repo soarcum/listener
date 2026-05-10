@@ -45,10 +45,20 @@ object AppLogger {
         loadPersistedEntries()
     }
 
+    private const val MAX_FILE_SIZE = 50 * 1024L // 50KB
+
     private fun loadPersistedEntries() {
         val file = logFile ?: return
         if (!file.exists()) return
         try {
+            // Truncate if file exceeds limit, keep last 80% of max size
+            if (file.length() > MAX_FILE_SIZE) {
+                val lines = file.readLines()
+                val keepFrom = (lines.size * 0.2).toInt()
+                val truncated = lines.drop(keepFrom)
+                file.writeText(truncated.joinToString("\n") + "\n")
+                Log.w("AppLogger", "Log file truncated: dropped ${keepFrom} old entries")
+            }
             val lines = file.readLines()
             for (line in lines) {
                 val entry = parseLogLine(line) ?: continue
@@ -57,7 +67,7 @@ object AppLogger {
             while (entries.size > MAX_ENTRIES) {
                 entries.removeAt(0)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("AppLogger", "Failed to load persisted logs", e)
         }
     }
@@ -136,6 +146,8 @@ object AppLogger {
     private fun persistEntry(entry: LogEntry) {
         val file = logFile ?: return
         try {
+            // Skip writing if file is already too large
+            if (file.length() > MAX_FILE_SIZE * 2) return
             val time = fileDateFormat.format(Date(entry.timestamp))
             val lvl = entry.level.name.first()
             file.appendText("$time [$lvl] ${entry.tag}: ${entry.message}\n")

@@ -15,7 +15,12 @@ enum class TtsProvider {
 }
 
 class TtsManager(context: Context) : TextToSpeech.OnInitListener {
-    private var tts: TextToSpeech? = TextToSpeech(context, this)
+    private var tts: TextToSpeech? = try {
+        TextToSpeech(context, this)
+    } catch (e: Exception) {
+        AppLogger.e("TtsManager", "Failed to initialize TextToSpeech", e)
+        null
+    }
     private var isReady = false
     private val utteranceCallbacks = ConcurrentHashMap<String, () -> Unit>()
     private val mainHandler = Handler(Looper.getMainLooper())
