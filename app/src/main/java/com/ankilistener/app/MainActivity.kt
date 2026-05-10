@@ -77,7 +77,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        AppLogger.init(this)
         AppLogger.i("App", "MainActivity.onCreate()")
+
+        // Set up global crash handler
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            AppLogger.e("CRASH", "Uncaught exception in ${thread.name}", throwable)
+            // Give logger time to persist
+            Thread.sleep(100)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
 
         repository = AnkiRepository(this)
         ttsManager = TtsManager(this)

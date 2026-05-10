@@ -1,6 +1,8 @@
 package com.ankilistener.app.util
 
+import android.content.Context
 import android.util.Log
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -9,6 +11,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * In-app logger that captures log entries for on-device viewing.
  * Also forwards all entries to Android logcat.
+ * Persists ERROR and WARN entries to file for crash debugging.
  */
 object AppLogger {
     enum class Level { DEBUG, INFO, WARN, ERROR }
@@ -31,6 +34,53 @@ object AppLogger {
     private const val MAX_ENTRIES = 500
     private val entries = CopyOnWriteArrayList<LogEntry>()
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
+    private var logFile: File? = null
+    private val fileDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+
+    fun init(context: Context) {
+        val logDir = File(context.filesDir, "logs")
+        if (!logDir.exists()) logDir.mkdirs()
+        logFile = File(logDir, "app.log")
+        // Load persisted entries on startup
+        loadPersistedEntries()
+    }
+
+    private fun loadPersistedEntries() {
+        val file = logFile ?: return
+        if (!file.exists()) return
+        try {
+            val lines = file.readLines()
+            for (line in lines) {
+                val entry = parseLogLine(line) ?: continue
+                entries.add(entry)
+            }
+            while (entries.size > MAX_ENTRIES) {
+                entries.removeAt(0)
+            }
+        } catch (e: Exception) {
+            Log.e("AppLogger", "Failed to load persisted logs", e)
+        }
+    }
+
+    private fun parseLogLine(line: String): LogEntry? {
+        // Format: "2024-01-01 12:00:00.000 [E] Tag: message"
+        val regex = Regex("""^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[([DEWI])\] (.+?): (.+)$""")
+        val match = regex.matchEntire(line) ?: return null
+        val (timeStr, levelChar, tag, message) = match.destructured
+        val timestamp = try {
+            fileDateFormat.parse(timeStr)?.time ?: return null
+        } catch (e: Exception) {
+            return null
+        }
+        val level = when (levelChar) {
+            "D" -> Level.DEBUG
+            "I" -> Level.INFO
+            "W" -> Level.WARN
+            "E" -> Level.ERROR
+            else -> return null
+        }
+        return LogEntry(timestamp, level, tag, message)
+    }
 
     fun addListener(listener: () -> Unit) {
         listeners.add(listener)
@@ -76,13 +126,36 @@ object AppLogger {
         while (entries.size > MAX_ENTRIES) {
             entries.removeAt(0)
         }
+        // Persist ERROR and WARN entries to file
+        if (level == Level.ERROR || level == Level.WARN) {
+            persistEntry(entry)
+        }
         notifyListeners()
+    }
+
+    private fun persistEntry(entry: LogEntry) {
+        val file = logFile ?: return
+        try {
+            val time = fileDateFormat.format(Date(entry.timestamp))
+            val lvl = entry.level.name.first()
+            file.appendText("$time [$lvl] ${entry.tag}: ${entry.message}\n")
+        } catch (e: Exception) {
+            Log.e("AppLogger", "Failed to persist log entry", e)
+        }
     }
 
     fun getEntries(): List<LogEntry> = entries.toList()
 
     fun clear() {
         entries.clear()
+        // Clear persisted file
+        logFile?.let { file ->
+            try {
+                if (file.exists()) file.writeText("")
+            } catch (e: Exception) {
+                Log.e("AppLogger", "Failed to clear log file", e)
+            }
+        }
         notifyListeners()
     }
 }
