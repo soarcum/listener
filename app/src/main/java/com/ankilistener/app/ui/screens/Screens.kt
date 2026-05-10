@@ -1,11 +1,12 @@
 package com.ankilistener.app.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,10 +16,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,6 +34,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.ankilistener.app.ui.viewmodel.AiAnswerPhase
+import com.ankilistener.app.ui.viewmodel.AiAnswerUiState
 import com.ankilistener.app.ui.viewmodel.ReviewState
 import com.ankilistener.app.ui.viewmodel.ReviewViewModel
 import com.ankilistener.app.util.HtmlUtils.toAnnotatedString
@@ -106,6 +116,18 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
     val gestureFeedback by viewModel.gestureFeedback
     val fontScale by viewModel.fontScale
     val prefetchStatus by viewModel.prefetchStatus
+    val aiState by viewModel.aiAnswerState
+    val questionPlaybackFinished by viewModel.questionPlaybackFinished
+    val context = LocalContext.current
+    val recordPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.startAiRecording()
+        } else {
+            viewModel.onAudioPermissionDenied()
+        }
+    }
 
     // Periodically refresh prefetch status
     LaunchedEffect(state, card) {
@@ -157,6 +179,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(24.dp)
+                .padding(bottom = if (aiState.enabled && state == ReviewState.FRONT) 180.dp else 0.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -211,53 +234,182 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
             }
         }
 
-    var lastFeedbackMessage by remember { mutableStateOf("") }
-    if (gestureFeedback != null) {
-        lastFeedbackMessage = gestureFeedback?.message ?: ""
-    }
+        val lastFeedbackMessage = gestureFeedback?.message.orEmpty()
 
-    AnimatedVisibility(
-        visible = gestureFeedback != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(top = 150.dp)
-    ) {
-        Box(
+        AnimatedVisibility(
+            visible = gestureFeedback != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
-                .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.medium)
-                .padding(horizontal = 24.dp, vertical = 12.dp)
+                .align(Alignment.TopCenter)
+                .padding(top = 150.dp)
         ) {
-            Text(
-                text = lastFeedbackMessage,
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-
-    // Preload status indicator (bottom-right)
-    if (prefetchStatus.prefetchCount > 0 && prefetchStatus.totalCards > 0) {
-        val cached = (prefetchStatus.cachedFrontCount + prefetchStatus.cachedBackCount)
-        val total = prefetchStatus.totalCards * 2 // front + back
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(12.dp)
-                .background(
-                    Color.Black.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(12.dp)
+            Box(
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.medium)
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = lastFeedbackMessage,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                .padding(horizontal = 10.dp, vertical = 5.dp)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = state == ReviewState.FRONT && card != null && aiState.enabled,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            Text(
-                text = "\uD83D\uDD0A $cached/$total",
-                color = if (cached == total) Color(0xFF81C784) else Color.White.copy(alpha = 0.8f),
-                fontSize = 12.sp
+            AiAnswerPanel(
+                state = aiState,
+                questionPlaybackFinished = questionPlaybackFinished,
+                onStartRecording = {
+                    if (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        viewModel.startAiRecording()
+                    } else {
+                        recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                onStopRecording = { viewModel.stopAndSubmitAiRecording() },
+                onCancelRecording = { viewModel.cancelAiRecording() }
             )
         }
+
+        // Preload status indicator (bottom-right)
+        if (prefetchStatus.prefetchCount > 0 && prefetchStatus.totalCards > 0) {
+            val cached = (prefetchStatus.cachedFrontCount + prefetchStatus.cachedBackCount)
+            val total = prefetchStatus.totalCards * 2 // front + back
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(12.dp)
+                    .background(
+                        Color.Black.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = "\uD83D\uDD0A $cached/$total",
+                    color = if (cached == total) Color(0xFF81C784) else Color.White.copy(alpha = 0.8f),
+                    fontSize = 12.sp
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun AiAnswerPanel(
+    state: AiAnswerUiState,
+    questionPlaybackFinished: Boolean,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+    onCancelRecording: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("AI 语音回答", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = when {
+                    state.phase == AiAnswerPhase.RECORDING -> "正在录音中"
+                    state.phase == AiAnswerPhase.SUBMITTING -> "正在分析回答"
+                    state.followUpQuestion.isNotBlank() && !questionPlaybackFinished -> "追问：${state.followUpQuestion}"
+                    state.followUpQuestion.isNotBlank() -> "追问：${state.followUpQuestion}（可开始录音）"
+                    questionPlaybackFinished -> "问题朗读完成后即可开始录音"
+                    else -> "等待问题朗读完成"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (state.phase == AiAnswerPhase.SUBMITTING) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("正在提交并分析")
+                }
+            }
+
+            if (state.error != null) {
+                Text(
+                    text = state.error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when (state.phase) {
+                    AiAnswerPhase.RECORDING -> {
+                        Button(onClick = onStopRecording) {
+                            Icon(Icons.Filled.Send, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("停止并提交")
+                        }
+                        OutlinedButton(onClick = onCancelRecording) {
+                            Icon(Icons.Filled.Stop, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("取消")
+                        }
+                    }
+                    AiAnswerPhase.SUBMITTING -> {
+                        OutlinedButton(onClick = {}, enabled = false) {
+                            Text("处理中")
+                        }
+                    }
+                    AiAnswerPhase.IDLE -> {
+                        Button(
+                            onClick = onStartRecording,
+                            enabled = questionPlaybackFinished
+                        ) {
+                            Icon(Icons.Filled.Mic, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (state.followUpQuestion.isNotBlank()) "回答追问" else "开始录音")
+                        }
+                    }
+                }
+            }
+
+            if (state.hasResult) {
+                Divider()
+                if (state.score != null) {
+                    Text("评分：${state.score}")
+                }
+                if (state.transcript.isNotBlank()) {
+                    Text("识别：${state.transcript}")
+                }
+                if (state.correction.isNotBlank()) {
+                    Text("纠正：${state.correction}")
+                }
+                if (state.feedback.isNotBlank()) {
+                    Text("反馈：${state.feedback}")
+                }
+                if (state.savedRecordPath != null) {
+                    Text(
+                        text = "已保存：${state.turnCount} 轮",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
     }
 }

@@ -32,6 +32,7 @@ enum class GestureType {
 class SettingsRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("gestures_prefs_v2", Context.MODE_PRIVATE)
     private val ttsPrefs: SharedPreferences = context.getSharedPreferences("tts_prefs", Context.MODE_PRIVATE)
+    private val aiPrefs: SharedPreferences = context.getSharedPreferences("ai_prefs_v1", Context.MODE_PRIVATE)
 
     // ---- Gesture Settings ----
 
@@ -134,5 +135,50 @@ class SettingsRepository(context: Context) {
 
     fun setLastDeckId(deckId: Long) {
         ttsPrefs.edit().putLong("last_deck_id", deckId).apply()
+    }
+
+    // ---- AI Answer Settings ----
+
+    fun getAiEnabled(): Boolean {
+        return aiPrefs.getBoolean("enabled", false)
+    }
+
+    fun setAiEnabled(enabled: Boolean) {
+        aiPrefs.edit().putBoolean("enabled", enabled).apply()
+    }
+
+    fun getAiEndpoint(): String {
+        return aiPrefs.getString(
+            "endpoint",
+            "http://172.22.64.1:3000/api/anki-listener/answer"
+        ) ?: "http://172.22.64.1:3000/api/anki-listener/answer"
+    }
+
+    fun setAiEndpoint(endpoint: String) {
+        aiPrefs.edit().putString("endpoint", endpoint).apply()
+    }
+
+    fun getAiApiKey(): String {
+        return aiPrefs.getString("api_key", "") ?: ""
+    }
+
+    fun setAiApiKey(apiKey: String) {
+        aiPrefs.edit().putString("api_key", apiKey).apply()
+    }
+
+    fun getAiModel(): String {
+        return aiPrefs.getString("model", "default") ?: "default"
+    }
+
+    fun setAiModel(model: String) {
+        aiPrefs.edit().putString("model", model).apply()
+    }
+
+    fun getAiFollowUpEnabled(): Boolean {
+        return aiPrefs.getBoolean("follow_up_enabled", true)
+    }
+
+    fun setAiFollowUpEnabled(enabled: Boolean) {
+        aiPrefs.edit().putBoolean("follow_up_enabled", enabled).apply()
     }
 }

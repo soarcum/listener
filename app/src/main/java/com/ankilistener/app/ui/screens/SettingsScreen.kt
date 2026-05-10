@@ -19,13 +19,13 @@ import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.TtsProvider
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val mappings by viewModel.gestureMappings
     val ttsSettings by viewModel.ttsSettings
+    val aiSettings by viewModel.aiSettings
     val cacheStats by viewModel.cacheStats
 
     // Refresh cache stats when entering settings
@@ -278,6 +278,99 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             // ---- Divider between sections ----
             item {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
+            // ---- AI Answer Settings Section ----
+            item {
+                Text(
+                    "AI 回答",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("启用 AI 语音回答", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "问题朗读完成后，可录音提交给 AI 评分、纠正并生成追问",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = aiSettings.enabled,
+                        onCheckedChange = { viewModel.updateAiEnabled(it) }
+                    )
+                }
+            }
+
+            if (aiSettings.enabled) {
+                item {
+                    TtsTextField(
+                        label = "AI 接口地址",
+                        value = aiSettings.endpoint,
+                        placeholder = "http://172.22.64.1:3000/api/anki-listener/answer",
+                        onValueChange = { viewModel.updateAiEndpoint(it) }
+                    )
+                }
+                item {
+                    TtsTextField(
+                        label = "API Key",
+                        value = aiSettings.apiKey,
+                        placeholder = "可留空",
+                        onValueChange = { viewModel.updateAiApiKey(it) }
+                    )
+                }
+                item {
+                    TtsTextField(
+                        label = "模型",
+                        value = aiSettings.model,
+                        placeholder = "default",
+                        onValueChange = { viewModel.updateAiModel(it) }
+                    )
+                }
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("允许 AI 追问", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "追问与回答会保存在本地记录中，不同步到 Anki",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = aiSettings.followUpEnabled,
+                            onCheckedChange = { viewModel.updateAiFollowUpEnabled(it) }
+                        )
+                    }
+                }
+                item {
+                    Text(
+                        "接口需接收 JSON：card、prompt、audio.base64、turnHistory；返回 transcript、score、feedback、correction、followUpQuestion。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                }
+                item {
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                }
             }
 
             // ---- Gesture Settings Section ----

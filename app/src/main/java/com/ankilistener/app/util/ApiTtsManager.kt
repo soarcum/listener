@@ -36,9 +36,12 @@ class ApiTtsManager(context: Context) {
      * Speaks the given text. Uses cached audio if available, otherwise
      * downloads, caches, then plays.
      */
-    fun speak(text: String) {
+    fun speak(text: String, onComplete: (() -> Unit)? = null) {
         stop()
-        if (text.isBlank()) return
+        if (text.isBlank()) {
+            onComplete?.invoke()
+            return
+        }
 
         playJob = scope.launch {
             try {
@@ -48,6 +51,7 @@ class ApiTtsManager(context: Context) {
 
                 if (filePath == null) {
                     Log.e(TAG, "Failed to get audio for text")
+                    onComplete?.invoke()
                     return@launch
                 }
 
@@ -71,6 +75,7 @@ class ApiTtsManager(context: Context) {
                                 if (mediaPlayer == it) {
                                     mediaPlayer = null
                                 }
+                                onComplete?.invoke()
                             }
                             prepare() // Synchronous since it's a local file
                             start()
@@ -78,12 +83,14 @@ class ApiTtsManager(context: Context) {
                         mediaPlayer = player
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to play cached audio", e)
+                        onComplete?.invoke()
                     }
                 }
             } catch (e: CancellationException) {
                 // Coroutine cancelled, expected behavior
             } catch (e: Exception) {
                 Log.e(TAG, "TTS speak error", e)
+                onComplete?.invoke()
             }
         }
     }

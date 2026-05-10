@@ -20,6 +20,14 @@ data class TtsSettings(
     val skipQuestionOnBack: Boolean = false
 )
 
+data class AiAnswerSettings(
+    val enabled: Boolean = false,
+    val endpoint: String = "http://172.22.64.1:3000/api/anki-listener/answer",
+    val apiKey: String = "",
+    val model: String = "default",
+    val followUpEnabled: Boolean = true
+)
+
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val ttsManager: TtsManager
@@ -33,6 +41,9 @@ class SettingsViewModel(
 
     private val _cacheStats = mutableStateOf(TtsAudioCache.CacheStats(0, 0L))
     val cacheStats: State<TtsAudioCache.CacheStats> = _cacheStats
+
+    private val _aiSettings = mutableStateOf(AiAnswerSettings())
+    val aiSettings: State<AiAnswerSettings> = _aiSettings
 
     init {
         loadSettings()
@@ -48,6 +59,13 @@ class SettingsViewModel(
             voice = settingsRepository.getTtsVoice(),
             prefetchCount = settingsRepository.getPrefetchCount(),
             skipQuestionOnBack = settingsRepository.getSkipQuestionOnBack()
+        )
+        _aiSettings.value = AiAnswerSettings(
+            enabled = settingsRepository.getAiEnabled(),
+            endpoint = settingsRepository.getAiEndpoint(),
+            apiKey = settingsRepository.getAiApiKey(),
+            model = settingsRepository.getAiModel(),
+            followUpEnabled = settingsRepository.getAiFollowUpEnabled()
         )
         refreshCacheStats()
     }
@@ -117,5 +135,30 @@ class SettingsViewModel(
     fun updateSkipQuestionOnBack(skip: Boolean) {
         settingsRepository.setSkipQuestionOnBack(skip)
         _ttsSettings.value = _ttsSettings.value.copy(skipQuestionOnBack = skip)
+    }
+
+    fun updateAiEnabled(enabled: Boolean) {
+        settingsRepository.setAiEnabled(enabled)
+        _aiSettings.value = _aiSettings.value.copy(enabled = enabled)
+    }
+
+    fun updateAiEndpoint(endpoint: String) {
+        settingsRepository.setAiEndpoint(endpoint)
+        _aiSettings.value = _aiSettings.value.copy(endpoint = endpoint)
+    }
+
+    fun updateAiApiKey(apiKey: String) {
+        settingsRepository.setAiApiKey(apiKey)
+        _aiSettings.value = _aiSettings.value.copy(apiKey = apiKey)
+    }
+
+    fun updateAiModel(model: String) {
+        settingsRepository.setAiModel(model)
+        _aiSettings.value = _aiSettings.value.copy(model = model)
+    }
+
+    fun updateAiFollowUpEnabled(enabled: Boolean) {
+        settingsRepository.setAiFollowUpEnabled(enabled)
+        _aiSettings.value = _aiSettings.value.copy(followUpEnabled = enabled)
     }
 }

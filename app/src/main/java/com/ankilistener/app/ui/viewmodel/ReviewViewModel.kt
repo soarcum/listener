@@ -4,6 +4,10 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ankilistener.app.data.AiAnswerApiClient
+import com.ankilistener.app.data.AiReviewRepository
+import com.ankilistener.app.data.AiReviewTurnRecord
+import com.ankilistener.app.data.AiSettings
 import com.ankilistener.app.data.AnkiRepository
 import com.ankilistener.app.data.Card
 import com.ankilistener.app.data.Deck
@@ -11,6 +15,7 @@ import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.util.AppLogger
+import com.ankilistener.app.util.AudioAnswerRecorder
 import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
@@ -33,11 +38,35 @@ data class PrefetchStatus(
     val prefetchCount: Int = 0
 )
 
+enum class AiAnswerPhase {
+    IDLE, RECORDING, SUBMITTING
+}
+
+data class AiAnswerUiState(
+    val enabled: Boolean = false,
+    val phase: AiAnswerPhase = AiAnswerPhase.IDLE,
+    val activePrompt: String = "",
+    val transcript: String = "",
+    val score: Int? = null,
+    val feedback: String = "",
+    val correction: String = "",
+    val followUpQuestion: String = "",
+    val savedRecordPath: String? = null,
+    val turnCount: Int = 0,
+    val error: String? = null
+) {
+    val hasResult: Boolean
+        get() = transcript.isNotBlank() || feedback.isNotBlank() || correction.isNotBlank() || score != null
+}
+
 class ReviewViewModel(
     private val repository: AnkiRepository,
     private val ttsManager: TtsManager,
     private val vibrateManager: VibrateManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val audioAnswerRecorder: AudioAnswerRecorder,
+    private val aiAnswerApiClient: AiAnswerApiClient,
+    private val aiReviewRepository: AiReviewRepository
 ) : ViewModel() {
 
     companion object {
@@ -68,8 +97,16 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private val _prefetchStatus = mutableStateOf(PrefetchStatus())
     val prefetchStatus: State<PrefetchStatus> = _prefetchStatus
 
+    private val _questionPlaybackFinished = mutableStateOf(false)
+    val questionPlaybackFinished: State<Boolean> = _questionPlaybackFinished
+
+    private val _aiAnswerState = mutableStateOf(AiAnswerUiState())
+    val aiAnswerState: State<AiAnswerUiState> = _aiAnswerState
+
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
     private var currentDeckId: Long? = null
+    private var aiSessionId: String? = null
+    private val aiTurnHistory = mutableListOf<AiReviewTurnRecord>()
 
     fun loadDecks() {
         viewModelScope.launch {
@@ -104,13 +141,17 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private fun showFront() {
         _reviewState.value = ReviewState.FRONT
         currentCard?.let {
+            resetAiSessionForCard(it)
+            _questionPlaybackFinished.value = false
             AppLogger.d(TAG, "Showing Front: noteId=${it.id}, ord=${it.ord}, index=${_currentIndex.value}")
-            ttsManager.speak(HtmlUtils.extractTtsText(it.front))
+            speakFrontQuestion(it)
         }
     }
 
     private fun showBack() {
+        cancelAiRecordingIfNeeded()
         _reviewState.value = ReviewState.BACK
+        _questionPlaybackFinished.value = false
         vibrateManager.vibrateShort()
         currentCard?.let {
             AppLogger.d(TAG, "Showing Back: noteId=${it.id}, ord=${it.ord}")
@@ -127,7 +168,53 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         }
     }
 
+    private fun resetAiSessionForCard(card: Card) {
+        audioAnswerRecorder.cancel()
+        aiTurnHistory.clear()
+        aiSessionId = aiReviewRepository.createSessionId(card)
+        _aiAnswerState.value = AiAnswerUiState(
+            enabled = settingsRepository.getAiEnabled()
+        )
+    }
+
+    private fun currentAiSettings(): AiSettings {
+        return AiSettings(
+            enabled = settingsRepository.getAiEnabled(),
+            endpoint = settingsRepository.getAiEndpoint(),
+            apiKey = settingsRepository.getAiApiKey(),
+            model = settingsRepository.getAiModel(),
+            followUpEnabled = settingsRepository.getAiFollowUpEnabled()
+        )
+    }
+
+    private fun speakFrontQuestion(card: Card) {
+        _questionPlaybackFinished.value = false
+        val noteId = card.id
+        val ord = card.ord
+        ttsManager.speak(HtmlUtils.extractTtsText(card.front)) {
+            val stillCurrent = currentCard?.let { current -> current.id == noteId && current.ord == ord } == true
+            if (stillCurrent && _reviewState.value == ReviewState.FRONT) {
+                _questionPlaybackFinished.value = true
+            }
+        }
+    }
+
+    private fun speakFollowUpQuestion(card: Card, question: String) {
+        if (question.isBlank()) return
+        _questionPlaybackFinished.value = false
+        val noteId = card.id
+        val ord = card.ord
+        ttsManager.speak(question) {
+            val stillCurrent = currentCard?.let { current -> current.id == noteId && current.ord == ord } == true
+            val sameQuestion = _aiAnswerState.value.followUpQuestion == question
+            if (stillCurrent && sameQuestion && _reviewState.value == ReviewState.FRONT) {
+                _questionPlaybackFinished.value = true
+            }
+        }
+    }
+
     private fun nextCard() {
+        cancelAiRecordingIfNeeded()
         val oldIndex = _currentIndex.value
         _currentIndex.value++
         AppLogger.d(TAG, "nextCard: $oldIndex -> ${_currentIndex.value} / ${_currentCards.value.size}")
@@ -162,8 +249,10 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     }
 
     private fun finishReview() {
+        cancelAiRecordingIfNeeded()
         AppLogger.i(TAG, "Review session finished. Reviewed ${_currentIndex.value} cards.")
         _reviewState.value = ReviewState.FINISHED
+        _questionPlaybackFinished.value = false
         ttsManager.speak("复习完成")
     }
 
@@ -227,6 +316,177 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             cachedBackCount = cachedBack,
             prefetchCount = prefetchCount
         )
+    }
+
+    // ---- AI voice answer ----
+
+    fun startAiRecording() {
+        val card = currentCard ?: return
+        val settings = currentAiSettings()
+
+        if (!settings.enabled) {
+            _aiAnswerState.value = _aiAnswerState.value.copy(
+                enabled = false,
+                error = "请先在设置中开启 AI 回答"
+            )
+            return
+        }
+
+        if (_reviewState.value != ReviewState.FRONT) {
+            _aiAnswerState.value = _aiAnswerState.value.copy(error = "请在问题正面回答")
+            return
+        }
+
+        val latestState = _aiAnswerState.value
+        val prompt = latestState.followUpQuestion.ifBlank { HtmlUtils.extractTtsText(card.front) }
+        if (!_questionPlaybackFinished.value) {
+            _aiAnswerState.value = latestState.copy(error = "请等待问题朗读完成")
+            return
+        }
+
+        try {
+            ttsManager.stop()
+            audioAnswerRecorder.start()
+            _aiAnswerState.value = latestState.copy(
+                enabled = true,
+                phase = AiAnswerPhase.RECORDING,
+                activePrompt = prompt,
+                transcript = "",
+                score = null,
+                feedback = "",
+                correction = "",
+                error = null
+            )
+            AppLogger.i(TAG, "AI answer recording started for noteId=${card.id}, ord=${card.ord}")
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to start AI answer recording", e)
+            _aiAnswerState.value = latestState.copy(error = "录音启动失败：${e.message}")
+        }
+    }
+
+    fun stopAndSubmitAiRecording() {
+        val card = currentCard ?: return
+        val activePrompt = _aiAnswerState.value.activePrompt.ifBlank {
+            _aiAnswerState.value.followUpQuestion.ifBlank { HtmlUtils.extractTtsText(card.front) }
+        }
+
+        val audioFile = try {
+            audioAnswerRecorder.stop()
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to stop AI answer recording", e)
+            _aiAnswerState.value = _aiAnswerState.value.copy(
+                phase = AiAnswerPhase.IDLE,
+                error = "录音保存失败：${e.message}"
+            )
+            return
+        }
+
+        if (audioFile == null || !audioFile.exists() || audioFile.length() == 0L) {
+            _aiAnswerState.value = _aiAnswerState.value.copy(
+                phase = AiAnswerPhase.IDLE,
+                error = "没有录到有效音频"
+            )
+            return
+        }
+
+        val settings = currentAiSettings()
+        _aiAnswerState.value = _aiAnswerState.value.copy(
+            phase = AiAnswerPhase.SUBMITTING,
+            error = null
+        )
+
+        viewModelScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    aiAnswerApiClient.evaluateAnswer(
+                        settings = settings,
+                        card = card,
+                        prompt = activePrompt,
+                        audioFile = audioFile,
+                        turnHistory = aiTurnHistory.toList()
+                    )
+                }
+
+                val followUpQuestion = if (settings.followUpEnabled) {
+                    result.followUpQuestion
+                } else {
+                    ""
+                }
+
+                val turn = AiReviewTurnRecord(
+                    turnIndex = aiTurnHistory.size + 1,
+                    prompt = activePrompt,
+                    audioFilePath = audioFile.absolutePath,
+                    transcript = result.transcript,
+                    score = result.score,
+                    feedback = result.feedback,
+                    correction = result.correction,
+                    followUpQuestion = followUpQuestion,
+                    rawResponse = result.rawResponse
+                )
+                aiTurnHistory.add(turn)
+
+                val recordFile = withContext(Dispatchers.IO) {
+                    aiReviewRepository.saveSession(
+                        card = card,
+                        sessionId = aiSessionId ?: aiReviewRepository.createSessionId(card),
+                        turns = aiTurnHistory.toList()
+                    )
+                }
+
+                val stillCurrent = currentCard?.let { current ->
+                    current.id == card.id && current.ord == card.ord
+                } == true
+                if (!stillCurrent || _reviewState.value != ReviewState.FRONT) {
+                    AppLogger.i(TAG, "AI answer saved for previous card: ${recordFile.absolutePath}")
+                    return@launch
+                }
+
+                _aiAnswerState.value = _aiAnswerState.value.copy(
+                    phase = AiAnswerPhase.IDLE,
+                    transcript = result.transcript,
+                    score = result.score,
+                    feedback = result.feedback,
+                    correction = result.correction,
+                    followUpQuestion = followUpQuestion,
+                    savedRecordPath = recordFile.absolutePath,
+                    turnCount = aiTurnHistory.size,
+                    error = null
+                )
+                if (followUpQuestion.isNotBlank()) {
+                    speakFollowUpQuestion(card, followUpQuestion)
+                }
+                AppLogger.i(TAG, "AI answer saved: ${recordFile.absolutePath}")
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "AI answer submission failed", e)
+                _aiAnswerState.value = _aiAnswerState.value.copy(
+                    phase = AiAnswerPhase.IDLE,
+                    error = "AI 处理失败：${e.message}"
+                )
+            }
+        }
+    }
+
+    fun cancelAiRecording() {
+        audioAnswerRecorder.cancel()
+        _aiAnswerState.value = _aiAnswerState.value.copy(
+            phase = AiAnswerPhase.IDLE,
+            error = null
+        )
+    }
+
+    private fun cancelAiRecordingIfNeeded() {
+        if (_aiAnswerState.value.phase == AiAnswerPhase.RECORDING) {
+            audioAnswerRecorder.cancel()
+            _aiAnswerState.value = _aiAnswerState.value.copy(
+                phase = AiAnswerPhase.IDLE,
+                error = null
+            )
+        }
+    }
+
+    fun onAudioPermissionDenied() {
+        _aiAnswerState.value = _aiAnswerState.value.copy(error = "需要麦克风权限才能录音回答")
     }
 
     // ---- Gesture Actions ----
@@ -329,7 +589,16 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                     } else {
                         HtmlUtils.extractTtsText(it.front)
                     }
-                    ttsManager.speak(text)
+                    if (_reviewState.value == ReviewState.FRONT) {
+                        val followUpQuestion = _aiAnswerState.value.followUpQuestion
+                        if (followUpQuestion.isNotBlank()) {
+                            speakFollowUpQuestion(it, followUpQuestion)
+                        } else {
+                            speakFrontQuestion(it)
+                        }
+                    } else {
+                        ttsManager.speak(text)
+                    }
                 }
             }
             GestureAction.ANSWER_AGAIN -> answerCardWithEase(AnkiRepository.EASE_AGAIN)
@@ -375,6 +644,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     override fun onCleared() {
         super.onCleared()
+        audioAnswerRecorder.cancel()
         ttsManager.release()
     }
 }

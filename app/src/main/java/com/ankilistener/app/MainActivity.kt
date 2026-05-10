@@ -18,6 +18,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.ankilistener.app.data.AiAnswerApiClient
+import com.ankilistener.app.data.AiReviewRepository
 import com.ankilistener.app.data.AnkiRepository
 import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.ui.screens.DeckSelectionScreen
@@ -27,6 +29,7 @@ import com.ankilistener.app.ui.screens.ReviewScreen
 import com.ankilistener.app.ui.screens.SettingsScreen
 import com.ankilistener.app.ui.viewmodel.ReviewViewModel
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
+import com.ankilistener.app.util.AudioAnswerRecorder
 import com.ankilistener.app.util.AppLogger
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
@@ -37,6 +40,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var ttsManager: TtsManager
     private lateinit var vibrateManager: VibrateManager
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var audioAnswerRecorder: AudioAnswerRecorder
+    private lateinit var aiAnswerApiClient: AiAnswerApiClient
+    private lateinit var aiReviewRepository: AiReviewRepository
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -55,6 +61,9 @@ class MainActivity : ComponentActivity() {
         ttsManager = TtsManager(this)
         vibrateManager = VibrateManager(this)
         settingsRepository = SettingsRepository(this)
+        audioAnswerRecorder = AudioAnswerRecorder(this)
+        aiAnswerApiClient = AiAnswerApiClient()
+        aiReviewRepository = AiReviewRepository(this)
 
         // Apply saved TTS settings
         ttsManager.provider = settingsRepository.getTtsProvider()
@@ -86,7 +95,15 @@ class MainActivity : ComponentActivity() {
                         AppLogger.i("App", "Permission granted, API available")
                         val reviewFactory = object : ViewModelProvider.Factory {
                             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                return ReviewViewModel(repository, ttsManager, vibrateManager, settingsRepository) as T
+                                return ReviewViewModel(
+                                    repository,
+                                    ttsManager,
+                                    vibrateManager,
+                                    settingsRepository,
+                                    audioAnswerRecorder,
+                                    aiAnswerApiClient,
+                                    aiReviewRepository
+                                ) as T
                             }
                         }
                         val settingsFactory = object : ViewModelProvider.Factory {
