@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import com.ankilistener.app.data.AiAnswerApiClient
 import com.ankilistener.app.data.AiReviewRepository
 import com.ankilistener.app.data.AnkiRepository
+import com.ankilistener.app.data.ConceptScheduleRepository
 import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.ui.screens.DeckSelectionScreen
 import com.ankilistener.app.ui.screens.LogViewerScreen
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var audioAnswerRecorder: AudioAnswerRecorder
     private lateinit var aiAnswerApiClient: AiAnswerApiClient
     private lateinit var aiReviewRepository: AiReviewRepository
+    private lateinit var conceptScheduleRepository: ConceptScheduleRepository
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -64,6 +66,7 @@ class MainActivity : ComponentActivity() {
         audioAnswerRecorder = AudioAnswerRecorder(this)
         aiAnswerApiClient = AiAnswerApiClient()
         aiReviewRepository = AiReviewRepository(this)
+        conceptScheduleRepository = ConceptScheduleRepository(this)
 
         // Apply saved TTS settings
         ttsManager.provider = settingsRepository.getTtsProvider()
@@ -102,7 +105,8 @@ class MainActivity : ComponentActivity() {
                                     settingsRepository,
                                     audioAnswerRecorder,
                                     aiAnswerApiClient,
-                                    aiReviewRepository
+                                    aiReviewRepository,
+                                    conceptScheduleRepository
                                 ) as T
                             }
                         }

@@ -39,6 +39,7 @@ import com.ankilistener.app.ui.viewmodel.AiAnswerPhase
 import com.ankilistener.app.ui.viewmodel.AiAnswerUiState
 import com.ankilistener.app.ui.viewmodel.ReviewState
 import com.ankilistener.app.ui.viewmodel.ReviewViewModel
+import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.HtmlUtils.toAnnotatedString
 import com.ankilistener.app.util.HtmlUtils.parseHtml
 
@@ -118,6 +119,9 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
     val prefetchStatus by viewModel.prefetchStatus
     val aiState by viewModel.aiAnswerState
     val questionPlaybackFinished by viewModel.questionPlaybackFinished
+    val dueConcepts by viewModel.dueConceptQueue
+    val currentConceptIdx by viewModel.currentConceptIndex
+    val concept = viewModel.currentConcept
     val context = LocalContext.current
     val recordPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -208,7 +212,64 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = parseHtml(it.back).toAnnotatedString(),
+                        text = parseHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back)).toAnnotatedString(),
+                        fontSize = (22 * fontScale).sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = (30 * fontScale).sp
+                    )
+                } else if (state == ReviewState.CONCEPT_FRONT && concept != null) {
+                    // Concept progress
+                    Text(
+                        text = "概念 ${currentConceptIdx + 1}/${dueConcepts.size}",
+                        fontSize = (14 * fontScale).sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // Concept title
+                    if (concept.title.isNotBlank()) {
+                        Text(
+                            text = concept.title,
+                            fontSize = (18 * fontScale).sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                    // Concept question
+                    Text(
+                        text = concept.question,
+                        fontSize = (22 * fontScale).sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = (30 * fontScale).sp
+                    )
+                } else if (state == ReviewState.CONCEPT_BACK && concept != null) {
+                    // Concept progress
+                    Text(
+                        text = "概念 ${currentConceptIdx + 1}/${dueConcepts.size}",
+                        fontSize = (14 * fontScale).sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // Concept question (dimmed)
+                    Text(
+                        text = concept.question,
+                        fontSize = (16 * fontScale).sp,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = (22 * fontScale).sp
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Divider(
+                        modifier = Modifier.fillMaxWidth(0.6f),
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    // Concept answer
+                    Text(
+                        text = concept.answer,
                         fontSize = (22 * fontScale).sp,
                         textAlign = TextAlign.Center,
                         lineHeight = (30 * fontScale).sp

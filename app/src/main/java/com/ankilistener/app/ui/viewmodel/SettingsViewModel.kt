@@ -28,6 +28,12 @@ data class AiAnswerSettings(
     val followUpEnabled: Boolean = true
 )
 
+data class ConceptSettings(
+    val enabled: Boolean = true,
+    val dueOnly: Boolean = true,
+    val againDelayMinutes: Int = 10
+)
+
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val ttsManager: TtsManager
@@ -44,6 +50,9 @@ class SettingsViewModel(
 
     private val _aiSettings = mutableStateOf(AiAnswerSettings())
     val aiSettings: State<AiAnswerSettings> = _aiSettings
+
+    private val _conceptSettings = mutableStateOf(ConceptSettings())
+    val conceptSettings: State<ConceptSettings> = _conceptSettings
 
     init {
         loadSettings()
@@ -66,6 +75,11 @@ class SettingsViewModel(
             apiKey = settingsRepository.getAiApiKey(),
             model = settingsRepository.getAiModel(),
             followUpEnabled = settingsRepository.getAiFollowUpEnabled()
+        )
+        _conceptSettings.value = ConceptSettings(
+            enabled = settingsRepository.getConceptReviewEnabled(),
+            dueOnly = settingsRepository.getConceptDueOnly(),
+            againDelayMinutes = settingsRepository.getConceptAgainDelayMinutes()
         )
         refreshCacheStats()
     }
@@ -160,5 +174,22 @@ class SettingsViewModel(
     fun updateAiFollowUpEnabled(enabled: Boolean) {
         settingsRepository.setAiFollowUpEnabled(enabled)
         _aiSettings.value = _aiSettings.value.copy(followUpEnabled = enabled)
+    }
+
+    // ---- Concept Settings ----
+
+    fun updateConceptEnabled(enabled: Boolean) {
+        settingsRepository.setConceptReviewEnabled(enabled)
+        _conceptSettings.value = _conceptSettings.value.copy(enabled = enabled)
+    }
+
+    fun updateConceptDueOnly(dueOnly: Boolean) {
+        settingsRepository.setConceptDueOnly(dueOnly)
+        _conceptSettings.value = _conceptSettings.value.copy(dueOnly = dueOnly)
+    }
+
+    fun updateConceptAgainDelayMinutes(minutes: Int) {
+        settingsRepository.setConceptAgainDelayMinutes(minutes)
+        _conceptSettings.value = _conceptSettings.value.copy(againDelayMinutes = minutes)
     }
 }

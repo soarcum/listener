@@ -137,6 +137,32 @@ class SettingsRepository(context: Context) {
         ttsPrefs.edit().putLong("last_deck_id", deckId).apply()
     }
 
+    // ---- Concept Review Settings ----
+
+    fun getConceptReviewEnabled(): Boolean {
+        return ttsPrefs.getBoolean("concept_review_enabled", true)
+    }
+
+    fun setConceptReviewEnabled(enabled: Boolean) {
+        ttsPrefs.edit().putBoolean("concept_review_enabled", enabled).apply()
+    }
+
+    fun getConceptDueOnly(): Boolean {
+        return ttsPrefs.getBoolean("concept_due_only", true)
+    }
+
+    fun setConceptDueOnly(dueOnly: Boolean) {
+        ttsPrefs.edit().putBoolean("concept_due_only", dueOnly).apply()
+    }
+
+    fun getConceptAgainDelayMinutes(): Int {
+        return ttsPrefs.getInt("concept_again_delay", 10)
+    }
+
+    fun setConceptAgainDelayMinutes(minutes: Int) {
+        ttsPrefs.edit().putInt("concept_again_delay", minutes.coerceAtLeast(1)).apply()
+    }
+
     // ---- AI Answer Settings ----
 
     fun getAiEnabled(): Boolean {

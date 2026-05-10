@@ -78,6 +78,19 @@ object HtmlUtils {
         return parseHtml(text).toString()
     }
 
+    private val CONCEPT_BLOCK_REGEX = Regex(
+        "<!--\\s*ankilistener:concepts:v1\\s*\\{.*?}\\s*-->",
+        RegexOption.DOT_MATCHES_ALL
+    )
+
+    /**
+     * Removes ankilistener:concepts:v1 JSON comment blocks from HTML.
+     * Used for display and TTS so the raw JSON is not shown or spoken.
+     */
+    fun removeAnkiListenerConceptBlocks(html: String): String {
+        return html.replace(CONCEPT_BLOCK_REGEX, "")
+    }
+
     /**
      * Extracts only the answer part (after <hr id=answer>) for TTS.
      */

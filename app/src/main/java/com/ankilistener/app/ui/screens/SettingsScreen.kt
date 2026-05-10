@@ -26,6 +26,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val mappings by viewModel.gestureMappings
     val ttsSettings by viewModel.ttsSettings
     val aiSettings by viewModel.aiSettings
+    val conceptSettings by viewModel.conceptSettings
     val cacheStats by viewModel.cacheStats
 
     // Refresh cache stats when entering settings
@@ -371,6 +372,95 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 item {
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
                 }
+            }
+
+            // ---- Concept Review Settings Section ----
+            item {
+                Text(
+                    "子概念复习",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("启用子概念复习", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "主卡背面嵌入的子概念会在复习时追问",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = conceptSettings.enabled,
+                        onCheckedChange = { viewModel.updateConceptEnabled(it) }
+                    )
+                }
+            }
+
+            if (conceptSettings.enabled) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("只复习到期子概念", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "关闭时每次主卡都追问所有子概念",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = conceptSettings.dueOnly,
+                            onCheckedChange = { viewModel.updateConceptDueOnly(it) }
+                        )
+                    }
+                }
+
+                item {
+                    var textValue by remember(conceptSettings.againDelayMinutes) {
+                        mutableStateOf(conceptSettings.againDelayMinutes.toString())
+                    }
+                    TtsTextField(
+                        label = "Again 延迟 (分钟)",
+                        value = textValue,
+                        placeholder = "10",
+                        keyboardType = KeyboardType.Number,
+                        onValueChange = { newValue ->
+                            if (newValue.all { it.isDigit() }) {
+                                textValue = newValue
+                                val minutes = newValue.toIntOrNull()
+                                if (minutes != null && minutes > 0) {
+                                    viewModel.updateConceptAgainDelayMinutes(minutes)
+                                }
+                            }
+                        }
+                    )
+                    Text(
+                        "子概念选择\"重来\"后多久再次出现",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            item {
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
             }
 
             // ---- Gesture Settings Section ----

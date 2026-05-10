@@ -10,12 +10,16 @@ import com.ankilistener.app.data.AiReviewTurnRecord
 import com.ankilistener.app.data.AiSettings
 import com.ankilistener.app.data.AnkiRepository
 import com.ankilistener.app.data.Card
+import com.ankilistener.app.data.ConceptCard
+import com.ankilistener.app.data.ConceptReviewState
+import com.ankilistener.app.data.ConceptScheduleRepository
 import com.ankilistener.app.data.Deck
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.util.AppLogger
 import com.ankilistener.app.util.AudioAnswerRecorder
+import com.ankilistener.app.util.ConceptCardParser
 import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.VibrateManager
@@ -25,7 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class ReviewState {
-    FRONT, BACK, FINISHED, LOADING
+    FRONT, BACK, CONCEPT_FRONT, CONCEPT_BACK, FINISHED, LOADING
 }
 
 /**
@@ -66,7 +70,8 @@ class ReviewViewModel(
     private val settingsRepository: SettingsRepository,
     private val audioAnswerRecorder: AudioAnswerRecorder,
     private val aiAnswerApiClient: AiAnswerApiClient,
-    private val aiReviewRepository: AiReviewRepository
+    private val aiReviewRepository: AiReviewRepository,
+    private val conceptScheduleRepository: ConceptScheduleRepository
 ) : ViewModel() {
 
     companion object {
@@ -102,6 +107,22 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private val _aiAnswerState = mutableStateOf(AiAnswerUiState())
     val aiAnswerState: State<AiAnswerUiState> = _aiAnswerState
+
+    // ---- Concept review state ----
+    private val _allConceptsForCurrentCard = mutableStateOf<List<ConceptCard>>(emptyList())
+    val allConceptsForCurrentCard: State<List<ConceptCard>> = _allConceptsForCurrentCard
+
+    private val _dueConceptQueue = mutableStateOf<List<ConceptCard>>(emptyList())
+    val dueConceptQueue: State<List<ConceptCard>> = _dueConceptQueue
+
+    private val _currentConceptIndex = mutableStateOf(0)
+    val currentConceptIndex: State<Int> = _currentConceptIndex
+
+    val currentConcept: ConceptCard?
+        get() = _dueConceptQueue.value.getOrNull(_currentConceptIndex.value)
+
+    private val _conceptReviewResults = mutableStateOf<Map<String, Int>>(emptyMap())
+    val conceptReviewResults: State<Map<String, Int>> = _conceptReviewResults
 
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
     private var currentDeckId: Long? = null
@@ -153,18 +174,136 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _reviewState.value = ReviewState.BACK
         _questionPlaybackFinished.value = false
         vibrateManager.vibrateShort()
+        // Prepare concept queue for this card
+        prepareConceptQueue()
         currentCard?.let {
             AppLogger.d(TAG, "Showing Back: noteId=${it.id}, ord=${it.ord}")
+            ttsManager.stop()
+            val hasConcepts = _dueConceptQueue.value.isNotEmpty()
+            ttsManager.speak(getBackTtsText(it)) {
+                // After back TTS finishes, auto-start concept flow if there are due concepts
+                if (hasConcepts && _reviewState.value == ReviewState.BACK) {
+                    startConceptFlow()
+                }
+            }
+        }
+    }
+
+    private fun prepareConceptQueue() {
+        val card = currentCard ?: return
+        if (!settingsRepository.getConceptReviewEnabled()) {
+            _allConceptsForCurrentCard.value = emptyList()
+            _dueConceptQueue.value = emptyList()
+            _conceptReviewResults.value = emptyMap()
+            return
+        }
+        val concepts = ConceptCardParser.parse(card.back, card.id, card.ord)
+        _allConceptsForCurrentCard.value = concepts
+        _conceptReviewResults.value = emptyMap()
+
+        val now = System.currentTimeMillis()
+        val dueOnly = settingsRepository.getConceptDueOnly()
+        val due = if (dueOnly) {
+            concepts.filter { c ->
+                val key = conceptScheduleRepository.buildKey(card.id, card.ord, c.id)
+                conceptScheduleRepository.isDue(key, now)
+            }
+        } else {
+            concepts
+        }
+
+        _dueConceptQueue.value = due
+        _currentConceptIndex.value = 0
+
+        if (due.isNotEmpty()) {
+            AppLogger.i(TAG, "Card has ${due.size} due concepts out of ${concepts.size} total")
+        }
+    }
+
+    private fun startConceptFlow() {
+        val concepts = _dueConceptQueue.value
+        if (concepts.isEmpty()) return
+        _currentConceptIndex.value = 0
+        showConceptFront()
+        val msg = "开始复习 ${concepts.size} 个相关概念"
+        _gestureFeedback.value = FeedbackEvent(msg)
+        AppLogger.i(TAG, msg)
+    }
+
+    private fun showConceptFront() {
+        val concept = currentConcept ?: return
+        _reviewState.value = ReviewState.CONCEPT_FRONT
+        _questionPlaybackFinished.value = false
+        AppLogger.d(TAG, "Concept front: ${concept.id} - ${concept.title}")
+        ttsManager.stop()
+        ttsManager.speak(concept.question) {
+            if (_reviewState.value == ReviewState.CONCEPT_FRONT && currentConcept?.id == concept.id) {
+                _questionPlaybackFinished.value = true
+            }
+        }
+    }
+
+    private fun showConceptBack() {
+        val concept = currentConcept ?: return
+        _reviewState.value = ReviewState.CONCEPT_BACK
+        _questionPlaybackFinished.value = false
+        AppLogger.d(TAG, "Concept back: ${concept.id}")
+        ttsManager.stop()
+        ttsManager.speak(concept.answer)
+    }
+
+    private fun answerConcept(ease: Int) {
+        val concept = currentConcept ?: return
+        val card = currentCard ?: return
+        val key = conceptScheduleRepository.buildKey(card.id, card.ord, concept.id)
+        val now = System.currentTimeMillis()
+        val againDelay = settingsRepository.getConceptAgainDelayMinutes()
+
+        val oldState = conceptScheduleRepository.getState(key)
+        AppLogger.i(TAG, "Concept answer: ${concept.id}, ease=$ease, oldState=$oldState")
+
+        conceptScheduleRepository.updateState(key, ease, now, againDelay)
+
+        val newState = conceptScheduleRepository.getState(key)
+        AppLogger.i(TAG, "Concept answer: ${concept.id}, newState=$newState")
+
+        _conceptReviewResults.value = _conceptReviewResults.value + (concept.id to ease)
+
+        // Vibrate based on ease
+        when (ease) {
+            ConceptReviewState.EASE_AGAIN -> vibrateManager.vibrateLong()
+            ConceptReviewState.EASE_HARD -> vibrateManager.vibrateMedium()
+            ConceptReviewState.EASE_GOOD -> vibrateManager.vibrateDoubleShort()
+            ConceptReviewState.EASE_EASY -> vibrateManager.vibrateShort()
+        }
+
+        // Next concept or back to main card
+        val nextIdx = _currentConceptIndex.value + 1
+        if (nextIdx < _dueConceptQueue.value.size) {
+            _currentConceptIndex.value = nextIdx
+            showConceptFront()
+        } else {
+            finishConceptFlow()
+        }
+    }
+
+    private fun finishConceptFlow() {
+        AppLogger.i(TAG, "Concept flow finished, returning to main card BACK")
+        _gestureFeedback.value = FeedbackEvent("相关概念复习完成")
+        _reviewState.value = ReviewState.BACK
+        // Re-speak the main card back text
+        currentCard?.let {
             ttsManager.stop()
             ttsManager.speak(getBackTtsText(it))
         }
     }
 
     private fun getBackTtsText(card: Card): String {
+        val cleaned = HtmlUtils.removeAnkiListenerConceptBlocks(card.back)
         return if (settingsRepository.getSkipQuestionOnBack()) {
-            HtmlUtils.extractAnswerOnly(card.back)
+            HtmlUtils.extractAnswerOnly(cleaned)
         } else {
-            HtmlUtils.extractTtsText(card.back)
+            HtmlUtils.extractTtsText(cleaned)
         }
     }
 
@@ -215,6 +354,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun nextCard() {
         cancelAiRecordingIfNeeded()
+        clearConceptState()
         val oldIndex = _currentIndex.value
         _currentIndex.value++
         AppLogger.d(TAG, "nextCard: $oldIndex -> ${_currentIndex.value} / ${_currentCards.value.size}")
@@ -226,9 +366,17 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         }
     }
 
+    private fun clearConceptState() {
+        _allConceptsForCurrentCard.value = emptyList()
+        _dueConceptQueue.value = emptyList()
+        _currentConceptIndex.value = 0
+        _conceptReviewResults.value = emptyMap()
+    }
+
     private fun buryCurrentCard() {
         currentCard?.let { card ->
             AppLogger.i(TAG, "Action: Bury card noteId=${card.id}, ord=${card.ord}")
+            clearConceptState()
             viewModelScope.launch(Dispatchers.IO) {
                 repository.buryCard(card, currentDeckId)
                 withContext(Dispatchers.Main) {
@@ -240,8 +388,9 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun undoLastAction() {
         if (_currentIndex.value > 0) {
-            AppLogger.w(TAG, "Action: Undo - only local navigation back, AnkiDroid API does not support undo")
+            AppLogger.w(TAG, "Action: Undo - only local navigation back, AnkiDroid API does not support undo. Concept schedule NOT rolled back.")
             vibrateManager.vibrateMedium()
+            clearConceptState()
             _currentIndex.value--
             showFront()
             // Note: repository.undoReview() is a no-op since AnkiDroid API doesn't support undo
@@ -288,6 +437,19 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 val backText = getBackTtsText(card)
                 ttsManager.prefetch(frontText)
                 ttsManager.prefetch(backText)
+
+                // Prefetch concept TTS for upcoming cards
+                if (settingsRepository.getConceptReviewEnabled()) {
+                    val concepts = ConceptCardParser.parse(card.back, card.id, card.ord)
+                    val now = System.currentTimeMillis()
+                    for (concept in concepts) {
+                        val key = conceptScheduleRepository.buildKey(card.id, card.ord, concept.id)
+                        if (conceptScheduleRepository.isDue(key, now)) {
+                            ttsManager.prefetch(concept.question)
+                            ttsManager.prefetch(concept.answer)
+                        }
+                    }
+                }
             }
 
             delay(500)
@@ -542,6 +704,14 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.UNDO }
             }
+            ReviewState.CONCEPT_FRONT -> {
+                actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS }
+            }
+            ReviewState.CONCEPT_BACK -> {
+                actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS }
+            }
             else -> null
         } ?: return
 
@@ -578,33 +748,60 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         when (action) {
             GestureAction.NONE -> { /* Do nothing */ }
             GestureAction.SHOW_ANSWER -> {
-                if (_reviewState.value == ReviewState.FRONT) {
-                    showBack()
+                when (_reviewState.value) {
+                    ReviewState.FRONT -> showBack()
+                    ReviewState.CONCEPT_FRONT -> showConceptBack()
+                    else -> {}
                 }
             }
             GestureAction.PLAY_TTS -> {
-                currentCard?.let {
-                    val text = if (_reviewState.value == ReviewState.BACK) {
-                        getBackTtsText(it)
-                    } else {
-                        HtmlUtils.extractTtsText(it.front)
-                    }
-                    if (_reviewState.value == ReviewState.FRONT) {
-                        val followUpQuestion = _aiAnswerState.value.followUpQuestion
-                        if (followUpQuestion.isNotBlank()) {
-                            speakFollowUpQuestion(it, followUpQuestion)
-                        } else {
-                            speakFrontQuestion(it)
+                when (_reviewState.value) {
+                    ReviewState.FRONT -> {
+                        currentCard?.let {
+                            val followUpQuestion = _aiAnswerState.value.followUpQuestion
+                            if (followUpQuestion.isNotBlank()) {
+                                speakFollowUpQuestion(it, followUpQuestion)
+                            } else {
+                                speakFrontQuestion(it)
+                            }
                         }
-                    } else {
-                        ttsManager.speak(text)
                     }
+                    ReviewState.BACK -> {
+                        currentCard?.let { ttsManager.speak(getBackTtsText(it)) }
+                    }
+                    ReviewState.CONCEPT_FRONT -> {
+                        currentConcept?.let { ttsManager.speak(it.question) }
+                    }
+                    ReviewState.CONCEPT_BACK -> {
+                        currentConcept?.let { ttsManager.speak(it.answer) }
+                    }
+                    else -> {}
                 }
             }
-            GestureAction.ANSWER_AGAIN -> answerCardWithEase(AnkiRepository.EASE_AGAIN)
-            GestureAction.ANSWER_HARD -> answerCardWithEase(AnkiRepository.EASE_HARD)
-            GestureAction.ANSWER_GOOD -> answerCardWithEase(AnkiRepository.EASE_GOOD)
-            GestureAction.ANSWER_EASY -> answerCardWithEase(AnkiRepository.EASE_EASY)
+            GestureAction.ANSWER_AGAIN -> {
+                when (_reviewState.value) {
+                    ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_AGAIN)
+                    else -> answerCardWithEase(AnkiRepository.EASE_AGAIN)
+                }
+            }
+            GestureAction.ANSWER_HARD -> {
+                when (_reviewState.value) {
+                    ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_HARD)
+                    else -> answerCardWithEase(AnkiRepository.EASE_HARD)
+                }
+            }
+            GestureAction.ANSWER_GOOD -> {
+                when (_reviewState.value) {
+                    ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_GOOD)
+                    else -> answerCardWithEase(AnkiRepository.EASE_GOOD)
+                }
+            }
+            GestureAction.ANSWER_EASY -> {
+                when (_reviewState.value) {
+                    ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_EASY)
+                    else -> answerCardWithEase(AnkiRepository.EASE_EASY)
+                }
+            }
             GestureAction.SKIP -> {
                 vibrateManager.vibrateShort()
                 buryCurrentCard()
@@ -620,13 +817,49 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun answerCardWithEase(ease: Int) {
         if (_reviewState.value == ReviewState.BACK) {
-            when (ease) {
+            // Check if there are pending concepts
+            val pendingCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
+            if (pendingCount > 0) {
+                _gestureFeedback.value = FeedbackEvent("还有 $pendingCount 个概念待复习")
+                return
+            }
+
+            // Apply concept score constraints
+            val effectiveEase = calculateEffectiveEase(ease)
+
+            when (effectiveEase) {
                 AnkiRepository.EASE_AGAIN -> vibrateManager.vibrateLong()
                 AnkiRepository.EASE_HARD -> vibrateManager.vibrateMedium()
                 AnkiRepository.EASE_GOOD -> vibrateManager.vibrateDoubleShort()
                 AnkiRepository.EASE_EASY -> vibrateManager.vibrateShort()
             }
-            answerCard(ease)
+            if (effectiveEase != ease) {
+                AppLogger.i(TAG, "Concept constraint: user chose $ease, submitting $effectiveEase")
+            }
+            answerCard(effectiveEase)
+        }
+    }
+
+    private fun calculateEffectiveEase(userEase: Int): Int {
+        val results = _conceptReviewResults.value
+        if (results.isEmpty()) return userEase
+
+        val worstConceptEase = results.values.minOrNull() ?: return userEase
+
+        return when {
+            // Any concept AGAIN -> main card forced AGAIN
+            worstConceptEase == ConceptReviewState.EASE_AGAIN -> {
+                if (userEase != AnkiRepository.EASE_AGAIN) {
+                    _gestureFeedback.value = FeedbackEvent("概念未掌握，强制重来")
+                }
+                AnkiRepository.EASE_AGAIN
+            }
+            // Any concept HARD (no AGAIN) -> max HARD
+            worstConceptEase == ConceptReviewState.EASE_HARD && userEase > AnkiRepository.EASE_HARD -> {
+                _gestureFeedback.value = FeedbackEvent("概念有困难，限制为困难")
+                AnkiRepository.EASE_HARD
+            }
+            else -> userEase
         }
     }
 
