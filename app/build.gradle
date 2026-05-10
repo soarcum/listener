@@ -12,7 +12,7 @@ android {
         applicationId "com.ankilistener.app"
         minSdk 24
         targetSdk 34
-        versionCode 31
+        versionCode 32
         versionName "1.0.20"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
