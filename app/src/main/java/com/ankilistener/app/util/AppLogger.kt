@@ -62,6 +62,7 @@ object AppLogger {
             val lines = file.readLines()
             for (line in lines) {
                 val entry = parseLogLine(line) ?: continue
+                if (isLegacyCrashNoise(entry)) continue
                 entries.add(entry)
             }
             while (entries.size > MAX_ENTRIES) {
@@ -70,6 +71,11 @@ object AppLogger {
         } catch (e: Throwable) {
             Log.e("AppLogger", "Failed to load persisted logs", e)
         }
+    }
+
+    private fun isLegacyCrashNoise(entry: LogEntry): Boolean {
+        if (entry.level != Level.ERROR || entry.tag != "CRASH") return false
+        return entry.message.endsWith(": null") || entry.message == "Uncaught exception in main"
     }
 
     private fun parseLogLine(line: String): LogEntry? {

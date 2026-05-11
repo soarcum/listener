@@ -109,6 +109,17 @@ class MainActivity : ComponentActivity() {
             }
             // Also log to logcat
             android.util.Log.e("CRASH", "Uncaught exception in ${thread.name}", throwable)
+            // Also surface to AppLogger so the in-app log viewer shows the new crash
+            try {
+                val summary = buildString {
+                    append("thread=${thread.name} type=${throwable?.javaClass?.simpleName ?: "null"}")
+                    append(" msg=${throwable?.message ?: "<no message>"}")
+                    val top = throwable?.stackTrace?.firstOrNull { it.className.startsWith("com.ankilistener") }
+                        ?: throwable?.stackTrace?.firstOrNull()
+                    if (top != null) append(" at ${top.className}.${top.methodName}:${top.lineNumber}")
+                }
+                AppLogger.e("CRASH", summary)
+            } catch (_: Throwable) { }
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
