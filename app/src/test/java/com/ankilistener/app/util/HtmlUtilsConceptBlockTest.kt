@@ -9,13 +9,13 @@ class HtmlUtilsConceptBlockTest {
     fun `removes concept block from HTML`() {
         val html = """
             <p>Answer text</p>
-            <!-- ankilistener:concepts:v1
-            { "items": [{ "id": "x", "title": "X", "q": "Q?", "a": "A." }] }
+            <!--
+            { "items": [{ "id": "x", "title": "X", "Q?": "A." }] }
             -->
         """.trimIndent()
 
         val cleaned = HtmlUtils.removeAnkiListenerConceptBlocks(html)
-        assertFalse(cleaned.contains("ankilistener"))
+        assertFalse(cleaned.contains("\"items\""))
         assertTrue(cleaned.contains("Answer text"))
     }
 

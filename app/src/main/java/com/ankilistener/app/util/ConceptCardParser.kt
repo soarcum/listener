@@ -6,32 +6,21 @@ import org.json.JSONObject
 
 object ConceptCardParser {
 
-    private val BLOCK_REGEX: Regex? by lazy {
+    private val COMMENT_REGEX: Regex? by lazy {
         runCatching {
-            Regex(
-                "<!--\\s*ankilistener:concepts:v1\\s*(\\{.*?\\})\\s*-->",
-                RegexOption.DOT_MATCHES_ALL
-            )
-        }.onFailure { AppLogger.e("ConceptParser", "BLOCK_REGEX compile failed", it) }.getOrNull()
-    }
-    private val STRIP_REGEX: Regex? by lazy {
-        runCatching {
-            Regex(
-                "<!--\\s*ankilistener:concepts:v1\\s*\\{.*?\\}\\s*-->",
-                RegexOption.DOT_MATCHES_ALL
-            )
-        }.onFailure { AppLogger.e("ConceptParser", "STRIP_REGEX compile failed", it) }.getOrNull()
+            Regex("<!--([\\s\\S]*?)-->")
+        }.onFailure { AppLogger.e("ConceptParser", "COMMENT_REGEX compile failed", it) }.getOrNull()
     }
 
     fun stripBlocks(html: String): String {
-        val regex = STRIP_REGEX ?: return html
-        return html.replace(regex, "")
+        val regex = COMMENT_REGEX ?: return html
+        return regex.replace(html) { m ->
+            if (extractConceptJson(m.groupValues[1]) != null) "" else m.value
+        }
     }
 
     fun parse(html: String, noteId: Long, ord: Int): List<ConceptCard> {
-        val regex = BLOCK_REGEX ?: return emptyList()
-        val match = regex.find(html) ?: return emptyList()
-        val jsonStr = match.groupValues[1]
+        val jsonStr = findConceptJson(html) ?: return emptyList()
         return try {
             val root = JSONObject(jsonStr)
             val items = root.getJSONArray("items")
@@ -40,6 +29,25 @@ object ConceptCardParser {
             AppLogger.e("ConceptParser", "Failed to parse concepts JSON", e)
             emptyList()
         }
+    }
+
+    private fun findConceptJson(html: String): String? {
+        val regex = COMMENT_REGEX ?: return null
+        for (match in regex.findAll(html)) {
+            val json = extractConceptJson(match.groupValues[1])
+            if (json != null) return json
+        }
+        return null
+    }
+
+    // Pull a JSON object containing "items" out of a comment's inner text.
+    // Tolerant of leading labels (e.g. legacy "ankilistener:concepts:v1") and surrounding whitespace.
+    private fun extractConceptJson(raw: String): String? {
+        val start = raw.indexOf('{')
+        val end = raw.lastIndexOf('}')
+        if (start < 0 || end <= start) return null
+        val json = raw.substring(start, end + 1)
+        return if (json.contains("\"items\"")) json else null
     }
 
     private fun parseItems(items: JSONArray, noteId: Long, ord: Int): List<ConceptCard> {
@@ -55,15 +63,12 @@ object ConceptCardParser {
                 }
                 seenIds.add(id)
                 val title = obj.optString("title", "")
-                val question = obj.optString("q", "")
-                val answer = obj.optString("a", "")
+                val (question, answer) = extractQuestionAnswer(obj)
                 if (answer.isBlank()) {
                     AppLogger.w("ConceptParser", "Concept '$id' has empty answer, skipping")
                     continue
                 }
-                val finalQuestion = question.ifBlank {
-                    "解释一下：$title"
-                }
+                val finalQuestion = question.ifBlank { "解释一下：$title" }
                 result.add(
                     ConceptCard(
                         id = id,
@@ -79,5 +84,20 @@ object ConceptCardParser {
             }
         }
         return result
+    }
+
+    // New format: question is the dynamic key whose value is the answer.
+    // Legacy format: explicit "q"/"a" keys. Prefer legacy when present.
+    private fun extractQuestionAnswer(obj: JSONObject): Pair<String, String> {
+        if (obj.has("q") || obj.has("a")) {
+            return obj.optString("q", "") to obj.optString("a", "")
+        }
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key == "id" || key == "title") continue
+            return key to obj.optString(key, "")
+        }
+        return "" to ""
     }
 }
