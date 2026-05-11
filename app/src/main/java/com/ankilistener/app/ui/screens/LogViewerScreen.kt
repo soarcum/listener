@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LogViewerScreen(onBack: () -> Unit) {
     var entries by remember { mutableStateOf(AppLogger.getEntries()) }
+    var crashLog by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -54,6 +55,33 @@ fun LogViewerScreen(onBack: () -> Unit) {
         }
     }
 
+    // Crash log dialog
+    crashLog?.let { log ->
+        AlertDialog(
+            onDismissRequest = { crashLog = null },
+            title = { Text("崩溃日志") },
+            text = {
+                Text(
+                    text = log,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    copyToClipboard(context, log)
+                }) {
+                    Text("复制")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { crashLog = null }) {
+                    Text("关闭")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -64,6 +92,16 @@ fun LogViewerScreen(onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    TextButton(onClick = {
+                        val file = java.io.File(context.filesDir, "crash.log")
+                        crashLog = if (file.exists() && file.length() > 0) {
+                            file.readText()
+                        } else {
+                            "暂无崩溃日志"
+                        }
+                    }) {
+                        Text("crash", fontSize = 12.sp)
+                    }
                     IconButton(onClick = {
                         val text = entries.joinToString("\n") { it.formatted() }
                         copyToClipboard(context, text)
@@ -107,7 +145,7 @@ fun LogViewerScreen(onBack: () -> Unit) {
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         color = color,
-                        maxLines = 3,
+                        maxLines = if (entry.level == AppLogger.Level.ERROR) 15 else 3,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()

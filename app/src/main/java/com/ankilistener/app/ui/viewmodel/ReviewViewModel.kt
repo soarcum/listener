@@ -143,22 +143,28 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         AppLogger.i(TAG, "startReview(deckId=$deckId)")
         viewModelScope.launch {
             try {
+                AppLogger.i(TAG, "Step 1: Setting LOADING state")
                 _reviewState.value = ReviewState.LOADING
+                AppLogger.i(TAG, "Step 2: Fetching cards for deckId=$deckId")
                 val cards = withContext(Dispatchers.IO) {
                     repository.getCardsToReview(deckId)
                 }
-                AppLogger.i(TAG, "Fetched ${cards.size} cards for review")
+                AppLogger.i(TAG, "Step 3: Fetched ${cards.size} cards")
                 settingsRepository.setLastDeckId(deckId)
                 _currentCards.value = cards
                 _currentIndex.value = 0
                 if (cards.isNotEmpty()) {
+                    AppLogger.i(TAG, "Step 4: Calling showFront()")
                     showFront()
+                    AppLogger.i(TAG, "Step 5: Calling prefetchUpcoming()")
                     prefetchUpcoming()
+                    AppLogger.i(TAG, "Step 6: All done")
                 } else {
+                    AppLogger.i(TAG, "Step 4: No cards, finishing")
                     finishReview()
                 }
-            } catch (e: Exception) {
-                AppLogger.e(TAG, "startReview failed", e)
+            } catch (e: Throwable) {
+                AppLogger.e(TAG, "startReview CRASHED at some step", e)
                 _reviewState.value = ReviewState.FINISHED
             }
         }
@@ -172,7 +178,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 _questionPlaybackFinished.value = false
                 AppLogger.d(TAG, "Showing Front: noteId=${it.id}, ord=${it.ord}, index=${_currentIndex.value}")
                 speakFrontQuestion(it)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 AppLogger.e(TAG, "showFront failed for noteId=${it.id}", e)
             }
         }

@@ -84,10 +84,31 @@ class MainActivity : ComponentActivity() {
         // Set up global crash handler first, before any initialization that might crash
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            val stackTrace = throwable?.stackTraceToString() ?: "no stack trace"
-            AppLogger.e("CRASH", "Uncaught exception in ${thread.name}: ${throwable?.message}\n$stackTrace")
-            // Give logger time to persist
-            Thread.sleep(100)
+            // Write crash log directly to file (bypass AppLogger to avoid any formatting issues)
+            try {
+                val crashFile = java.io.File(filesDir, "crash.log")
+                val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date())
+                val sb = StringBuilder()
+                sb.appendLine("=== CRASH at $timestamp ===")
+                sb.appendLine("Thread: ${thread.name}")
+                sb.appendLine("Throwable: $throwable")
+                sb.appendLine("Message: ${throwable?.message}")
+                sb.appendLine("Cause: ${throwable?.cause}")
+                if (throwable != null) {
+                    sb.appendLine("Stack trace:")
+                    for (element in throwable.stackTrace) {
+                        sb.appendLine("  at $element")
+                    }
+                } else {
+                    sb.appendLine("Throwable is NULL - no stack trace available")
+                }
+                sb.appendLine("=== END CRASH ===")
+                crashFile.appendText(sb.toString())
+            } catch (_: Exception) {
+                // If we can't write crash log, nothing we can do
+            }
+            // Also log to logcat
+            android.util.Log.e("CRASH", "Uncaught exception in ${thread.name}", throwable)
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
@@ -321,7 +342,9 @@ fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: Vi
             DeckSelectionScreen(
                 viewModel = viewModel,
                 onDeckClick = { deckId ->
+                    AppLogger.i("Nav", "onDeckClick: deckId=$deckId")
                     viewModel.startReview(deckId)
+                    AppLogger.i("Nav", "Navigating to review screen")
                     navController.navigate("review")
                 },
                 onSettingsClick = {
