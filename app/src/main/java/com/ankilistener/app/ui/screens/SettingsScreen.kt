@@ -13,12 +13,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.TtsProvider
+import com.ankilistener.app.util.UpdateManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -483,6 +485,21 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     }
                 )
                 Divider()
+            }
+
+            // ---- Version Info ----
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                val context = LocalContext.current
+                val version = remember { UpdateManager.getCurrentVersion(context) }
+                Text(
+                    text = "AnkiListener v$version",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
             }
         }
     }

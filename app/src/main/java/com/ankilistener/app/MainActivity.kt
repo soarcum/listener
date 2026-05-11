@@ -23,7 +23,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +53,7 @@ import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.AudioAnswerRecorder
 import com.ankilistener.app.util.AppLogger
 import com.ankilistener.app.util.TtsManager
+import com.ankilistener.app.util.DownloadState
 import com.ankilistener.app.util.UpdateInfo
 import com.ankilistener.app.util.UpdateManager
 import com.ankilistener.app.util.VibrateManager
@@ -155,14 +158,20 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun UpdateDialog(updateInfo: UpdateInfo, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-
+fun UpdateDialog(
+    updateInfo: UpdateInfo,
+    downloadState: DownloadState,
+    onUpdate: () -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (downloadState !is DownloadState.Downloading) onDismiss()
+        },
         title = {
             Text(
-                text = "New Version Available",
+                text = if (downloadState is DownloadState.Downloading) "正在下载" else "发现新版本",
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
             )
@@ -170,27 +179,87 @@ fun UpdateDialog(updateInfo: UpdateInfo, onDismiss: () -> Unit) {
         text = {
             Column {
                 Text("AnkiListener v${updateInfo.version}")
-                if (updateInfo.body.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = updateInfo.body,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+
+                when (downloadState) {
+                    is DownloadState.Idle -> {
+                        if (updateInfo.body.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = updateInfo.body,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    is DownloadState.Downloading -> {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        LinearProgressIndicator(
+                            progress = { if (downloadState.progress >= 0) downloadState.progress / 100f else 0f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val sizeText = if (downloadState.totalBytes > 0) {
+                            val downloadedMB = "%.1f".format(downloadState.downloadedBytes / (1024.0 * 1024.0))
+                            val totalMB = "%.1f".format(downloadState.totalBytes / (1024.0 * 1024.0))
+                            "$downloadedMB / $totalMB MB"
+                        } else {
+                            val downloadedMB = "%.1f".format(downloadState.downloadedBytes / (1024.0 * 1024.0))
+                            "$downloadedMB MB"
+                        }
+                        Text(
+                            text = if (downloadState.progress >= 0) "${downloadState.progress}%  $sizeText" else sizeText,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    is DownloadState.Installing -> {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "下载完成，正在启动安装...",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    is DownloadState.Error -> {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = downloadState.message,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = {
-                UpdateManager.downloadAndInstall(context, updateInfo.downloadUrl, updateInfo.version)
-                onDismiss()
-            }) {
-                Text("Update")
+            when (downloadState) {
+                is DownloadState.Idle -> {
+                    Button(onClick = onUpdate) {
+                        Text("更新")
+                    }
+                }
+                is DownloadState.Downloading -> {
+                    // Disable during download
+                }
+                is DownloadState.Error -> {
+                    Button(onClick = onRetry) {
+                        Text("重试")
+                    }
+                }
+                is DownloadState.Installing -> {
+                    // No button needed
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Later")
+            if (downloadState !is DownloadState.Downloading) {
+                TextButton(onClick = onDismiss) {
+                    Text(when (downloadState) {
+                        is DownloadState.Error -> "取消"
+                        is DownloadState.Installing -> "关闭"
+                        else -> "稍后"
+                    })
+                }
             }
         }
     )
@@ -202,8 +271,10 @@ fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: Vi
     val viewModel: ReviewViewModel = viewModel(factory = reviewFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory)
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
 
     LaunchedEffect(Unit) {
         try {
@@ -220,7 +291,27 @@ fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: Vi
     updateInfo?.let { info ->
         UpdateDialog(
             updateInfo = info,
-            onDismiss = { updateInfo = null }
+            downloadState = downloadState,
+            onUpdate = {
+                downloadState = DownloadState.Idle
+                scope.launch {
+                    UpdateManager.downloadAndInstall(
+                        context, info.downloadUrl, info.version
+                    ) { state -> downloadState = state }
+                }
+            },
+            onRetry = {
+                downloadState = DownloadState.Idle
+                scope.launch {
+                    UpdateManager.downloadAndInstall(
+                        context, info.downloadUrl, info.version
+                    ) { state -> downloadState = state }
+                }
+            },
+            onDismiss = {
+                updateInfo = null
+                downloadState = DownloadState.Idle
+            }
         )
     }
 

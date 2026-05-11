@@ -1,24 +1,22 @@
 package com.ankilistener.app.util
 
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
-import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.coroutines.resume
+import java.util.concurrent.TimeUnit
 
 data class UpdateInfo(
     val version: String,
@@ -26,10 +24,28 @@ data class UpdateInfo(
     val body: String
 )
 
+sealed class DownloadState {
+    data object Idle : DownloadState()
+    data class Downloading(val progress: Int, val downloadedBytes: Long, val totalBytes: Long) : DownloadState()
+    data class Installing(val file: File) : DownloadState()
+    data class Error(val message: String) : DownloadState()
+}
+
 object UpdateManager {
 
     private const val REPO = "slowpack/listener"
     private const val GITHUB_API = "https://api.github.com/repos/$REPO/releases/latest"
+    private const val MAX_RETRY = 3
+    private const val TAG = "UpdateManager"
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .build()
+
+    private const val GITHUB_TOKEN = "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"
 
     fun getCurrentVersion(context: Context): String {
         return try {
@@ -39,43 +55,48 @@ object UpdateManager {
         }
     }
 
-    private const val GITHUB_TOKEN = "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"
-
     suspend fun checkForUpdate(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            val url = URL(GITHUB_API)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            conn.setRequestProperty("User-Agent", "AnkiListener")
-            conn.setRequestProperty("Authorization", "Bearer $GITHUB_TOKEN")
-            conn.connectTimeout = 10000
-            conn.readTimeout = 10000
+            val request = Request.Builder()
+                .url(GITHUB_API)
+                .addHeader("Accept", "application/vnd.github.v3+json")
+                .addHeader("User-Agent", "AnkiListener")
+                .addHeader("Authorization", "Bearer $GITHUB_TOKEN")
+                .build()
 
-            if (conn.responseCode != 200) return@withContext null
-
-            val body = conn.inputStream.bufferedReader().use(BufferedReader::readText)
-            val json = JSONObject(body)
-            val tagName = json.getString("tag_name").removePrefix("v")
-            val releaseBody = json.optString("body", "")
-
-            val currentVersion = getCurrentVersion(context)
-            if (isNewerVersion(tagName, currentVersion)) {
-                val assets = json.getJSONArray("assets")
-                for (i in 0 until assets.length()) {
-                    val asset = assets.getJSONObject(i)
-                    val name = asset.getString("name")
-                    if (name.endsWith(".apk")) {
-                        return@withContext UpdateInfo(
-                            version = tagName,
-                            downloadUrl = asset.getString("browser_download_url"),
-                            body = releaseBody
-                        )
-                    }
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    AppLogger.w(TAG, "Update check HTTP ${response.code}")
+                    return@withContext null
                 }
+
+                val body = response.body?.string() ?: return@withContext null
+                val json = JSONObject(body)
+                val tagName = json.getString("tag_name").removePrefix("v")
+                val releaseBody = json.optString("body", "")
+
+                val currentVersion = getCurrentVersion(context)
+                AppLogger.i(TAG, "Current: $currentVersion, Latest: $tagName")
+
+                if (isNewerVersion(tagName, currentVersion)) {
+                    val assets = json.getJSONArray("assets")
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.getJSONObject(i)
+                        val name = asset.getString("name")
+                        if (name.endsWith(".apk")) {
+                            return@withContext UpdateInfo(
+                                version = tagName,
+                                downloadUrl = asset.getString("browser_download_url"),
+                                body = releaseBody
+                            )
+                        }
+                    }
+                    AppLogger.w(TAG, "No APK found in release assets")
+                }
+                null
             }
-            null
         } catch (e: Exception) {
-            AppLogger.e("UpdateManager", "Check failed: ${e.message}")
+            AppLogger.e(TAG, "Update check failed: ${e.message}")
             null
         }
     }
@@ -93,41 +114,112 @@ object UpdateManager {
         return false
     }
 
-    fun downloadAndInstall(context: Context, downloadUrl: String, version: String) {
+    suspend fun downloadAndInstall(
+        context: Context,
+        downloadUrl: String,
+        version: String,
+        onStateChange: (DownloadState) -> Unit
+    ) = withContext(Dispatchers.IO) {
         val fileName = "AnkiListener-v$version.apk"
         val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
-        if (file.exists()) {
+
+        // Already downloaded
+        if (file.exists() && file.length() > 1024) {
+            AppLogger.i(TAG, "APK already cached: ${file.name}")
+            onStateChange(DownloadState.Installing(file))
             installApk(context, file)
-            return
+            return@withContext
         }
 
-        val request = DownloadManager.Request(Uri.parse(downloadUrl))
-            .setTitle("AnkiListener v$version")
-            .setDescription("Downloading update...")
-            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .addRequestHeader("Authorization", "Bearer $GITHUB_TOKEN")
-
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val downloadId = dm.enqueue(request)
-
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                if (id == downloadId) {
-                    ctx.unregisterReceiver(this)
-                    installApk(ctx, file)
+        var lastError: String? = null
+        for (attempt in 1..MAX_RETRY) {
+            AppLogger.i(TAG, "Download attempt $attempt/$MAX_RETRY")
+            onStateChange(DownloadState.Downloading(0, 0, 0))
+            try {
+                downloadApk(downloadUrl, file, onStateChange)
+                AppLogger.i(TAG, "Download complete: ${file.length()} bytes")
+                onStateChange(DownloadState.Installing(file))
+                installApk(context, file)
+                return@withContext
+            } catch (e: Exception) {
+                lastError = e.message ?: "Unknown error"
+                AppLogger.e(TAG, "Download attempt $attempt failed: $lastError")
+                if (file.exists()) file.delete()
+                if (attempt < MAX_RETRY) {
+                    onStateChange(DownloadState.Downloading(0, 0, 0)) // Reset before retry
                 }
             }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+
+        val errorMsg = "Download failed after $MAX_RETRY attempts: $lastError"
+        AppLogger.e(TAG, errorMsg)
+        onStateChange(DownloadState.Error(errorMsg))
+    }
+
+    private fun downloadApk(
+        downloadUrl: String,
+        targetFile: File,
+        onStateChange: (DownloadState) -> Unit
+    ) {
+        val request = Request.Builder()
+            .url(downloadUrl)
+            .addHeader("Authorization", "Bearer $GITHUB_TOKEN")
+            .addHeader("User-Agent", "AnkiListener")
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw RuntimeException("HTTP ${response.code}")
+            }
+
+            val body = response.body ?: throw RuntimeException("Empty response body")
+            val totalBytes = body.contentLength()
+            val tempFile = File(targetFile.parent, "${targetFile.name}.tmp")
+
+            try {
+                body.byteStream().use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        var downloadedBytes = 0L
+                        var lastProgressReport = 0
+
+                        while (true) {
+                            val bytesRead = input.read(buffer)
+                            if (bytesRead == -1) break
+                            output.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+
+                            val progress = if (totalBytes > 0) {
+                                (downloadedBytes * 100 / totalBytes).toInt()
+                            } else {
+                                -1 // Unknown total
+                            }
+
+                            // Report progress at every 1% change
+                            if (progress != lastProgressReport) {
+                                lastProgressReport = progress
+                                onStateChange(DownloadState.Downloading(progress, downloadedBytes, totalBytes))
+                            }
+                        }
+
+                        output.flush()
+                    }
+                }
+
+                // Atomic rename
+                if (!tempFile.renameTo(targetFile)) {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                }
+            } catch (e: Exception) {
+                tempFile.delete()
+                throw e
+            }
         }
     }
 
     private fun installApk(context: Context, file: File) {
+        AppLogger.i(TAG, "Launching installer for ${file.name}")
         val intent = Intent(Intent.ACTION_VIEW)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
