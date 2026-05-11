@@ -6,19 +6,31 @@ import org.json.JSONObject
 
 object ConceptCardParser {
 
-    private val BLOCK_REGEX = Regex(
-        "<!--\\s*ankilistener:concepts:v1\\s*(\\{.*?})\\s*-->",
-        RegexOption.DOT_MATCHES_ALL
-    )
-    private val STRIP_REGEX = Regex(
-        "<!--\\s*ankilistener:concepts:v1\\s*\\{.*?}\\s*-->",
-        RegexOption.DOT_MATCHES_ALL
-    )
+    private val BLOCK_REGEX: Regex? by lazy {
+        runCatching {
+            Regex(
+                "<!--\\s*ankilistener:concepts:v1\\s*(\\{.*?\\})\\s*-->",
+                RegexOption.DOT_MATCHES_ALL
+            )
+        }.onFailure { AppLogger.e("ConceptParser", "BLOCK_REGEX compile failed", it) }.getOrNull()
+    }
+    private val STRIP_REGEX: Regex? by lazy {
+        runCatching {
+            Regex(
+                "<!--\\s*ankilistener:concepts:v1\\s*\\{.*?\\}\\s*-->",
+                RegexOption.DOT_MATCHES_ALL
+            )
+        }.onFailure { AppLogger.e("ConceptParser", "STRIP_REGEX compile failed", it) }.getOrNull()
+    }
 
-    fun stripBlocks(html: String): String = html.replace(STRIP_REGEX, "")
+    fun stripBlocks(html: String): String {
+        val regex = STRIP_REGEX ?: return html
+        return html.replace(regex, "")
+    }
 
     fun parse(html: String, noteId: Long, ord: Int): List<ConceptCard> {
-        val match = BLOCK_REGEX.find(html) ?: return emptyList()
+        val regex = BLOCK_REGEX ?: return emptyList()
+        val match = regex.find(html) ?: return emptyList()
         val jsonStr = match.groupValues[1]
         return try {
             val root = JSONObject(jsonStr)
