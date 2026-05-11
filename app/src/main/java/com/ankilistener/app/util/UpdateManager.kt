@@ -39,12 +39,15 @@ object UpdateManager {
         }
     }
 
+    private const val GITHUB_TOKEN = "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"
+
     suspend fun checkForUpdate(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
             val url = URL(GITHUB_API)
             val conn = url.openConnection() as HttpURLConnection
             conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
             conn.setRequestProperty("User-Agent", "AnkiListener")
+            conn.setRequestProperty("Authorization", "Bearer $GITHUB_TOKEN")
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
 
@@ -103,6 +106,7 @@ object UpdateManager {
             .setDescription("Downloading update...")
             .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .addRequestHeader("Authorization", "Bearer $GITHUB_TOKEN")
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = dm.enqueue(request)

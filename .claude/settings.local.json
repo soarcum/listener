@@ -29,10 +29,15 @@
       "Read(//dev/**)",
       "Read(//c/Users/Administrator/**)",
       "WebSearch",
-      "WebFetch"
+      "WebFetch",
+      "Bash(rm .claude/skills/commitandbuild.md)",
+      "Bash(cd c:/Users/Administrator/Desktop/cool/listener && echo -n \"e0d10410d0348a65db3ab176ed45519471d9193b\" > .last_commit_sha)",
+      "Bash(where.exe gh *)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\Administrator\\.claude"
+      "C:\\Users\\Administrator\\.claude",
+      "C:\\Users\\Administrator\\Desktop\\cool\\listener\\.claude\\skills",
+      "c:\\Users\\Administrator\\Desktop\\cool\\listener"
     ]
   }
 }

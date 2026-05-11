@@ -1,6 +1,7 @@
 ---
 name: commitandbuild
 description: commit@build - 自动增加版本号、提交推送代码、监听 GitHub Actions 打包状态
+when_to_use: 当用户说 "提交打包" / "commit and build" / "commit@build" 时触发
 ---
 
 # 提交并监听打包状态
