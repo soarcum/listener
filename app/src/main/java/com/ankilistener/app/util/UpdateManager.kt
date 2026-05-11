@@ -45,6 +45,14 @@ object UpdateManager {
         .followSslRedirects(true)
         .build()
 
+    // 私有仓库 asset 下载需要手动处理 302,避免把 Authorization 头转发到 S3 预签名 URL 触发 400/403
+    private val downloadClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+
     private const val GITHUB_TOKEN = "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"
 
     fun getCurrentVersion(context: Context): String {
@@ -86,7 +94,7 @@ object UpdateManager {
                         if (name.endsWith(".apk")) {
                             return@withContext UpdateInfo(
                                 version = tagName,
-                                downloadUrl = asset.getString("browser_download_url"),
+                                downloadUrl = asset.getString("url"),
                                 body = releaseBody
                             )
                         }
@@ -161,60 +169,85 @@ object UpdateManager {
         targetFile: File,
         onStateChange: (DownloadState) -> Unit
     ) {
-        val request = Request.Builder()
+        val authedRequest = Request.Builder()
             .url(downloadUrl)
             .addHeader("Authorization", "Bearer $GITHUB_TOKEN")
+            .addHeader("Accept", "application/octet-stream")
             .addHeader("User-Agent", "AnkiListener")
             .build()
 
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw RuntimeException("HTTP ${response.code}")
+        downloadClient.newCall(authedRequest).execute().use { firstResp ->
+            val streamResp = when (firstResp.code) {
+                301, 302, 303, 307, 308 -> {
+                    val location = firstResp.header("Location")
+                        ?: throw RuntimeException("Redirect ${firstResp.code} without Location header")
+                    val cdnRequest = Request.Builder()
+                        .url(location)
+                        .addHeader("User-Agent", "AnkiListener")
+                        .build()
+                    downloadClient.newCall(cdnRequest).execute()
+                }
+                200 -> firstResp
+                else -> throw RuntimeException("HTTP ${firstResp.code}")
             }
 
-            val body = response.body ?: throw RuntimeException("Empty response body")
-            val totalBytes = body.contentLength()
-            val tempFile = File(targetFile.parent, "${targetFile.name}.tmp")
-
+            val ownsResp = streamResp !== firstResp
             try {
-                body.byteStream().use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        val buffer = ByteArray(8192)
-                        var downloadedBytes = 0L
-                        var lastProgressReport = 0
+                if (!streamResp.isSuccessful) {
+                    throw RuntimeException("HTTP ${streamResp.code} from CDN")
+                }
+                writeBodyToFile(streamResp, targetFile, onStateChange)
+            } finally {
+                if (ownsResp) streamResp.close()
+            }
+        }
+    }
 
-                        while (true) {
-                            val bytesRead = input.read(buffer)
-                            if (bytesRead == -1) break
-                            output.write(buffer, 0, bytesRead)
-                            downloadedBytes += bytesRead
+    private fun writeBodyToFile(
+        response: okhttp3.Response,
+        targetFile: File,
+        onStateChange: (DownloadState) -> Unit
+    ) {
+        val body = response.body ?: throw RuntimeException("Empty response body")
+        val totalBytes = body.contentLength()
+        val tempFile = File(targetFile.parent, "${targetFile.name}.tmp")
 
-                            val progress = if (totalBytes > 0) {
-                                (downloadedBytes * 100 / totalBytes).toInt()
-                            } else {
-                                -1 // Unknown total
-                            }
+        try {
+            body.byteStream().use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    val buffer = ByteArray(8192)
+                    var downloadedBytes = 0L
+                    var lastProgressReport = 0
 
-                            // Report progress at every 1% change
-                            if (progress != lastProgressReport) {
-                                lastProgressReport = progress
-                                onStateChange(DownloadState.Downloading(progress, downloadedBytes, totalBytes))
-                            }
+                    while (true) {
+                        val bytesRead = input.read(buffer)
+                        if (bytesRead == -1) break
+                        output.write(buffer, 0, bytesRead)
+                        downloadedBytes += bytesRead
+
+                        val progress = if (totalBytes > 0) {
+                            (downloadedBytes * 100 / totalBytes).toInt()
+                        } else {
+                            -1
                         }
 
-                        output.flush()
+                        if (progress != lastProgressReport) {
+                            lastProgressReport = progress
+                            onStateChange(DownloadState.Downloading(progress, downloadedBytes, totalBytes))
+                        }
                     }
-                }
 
-                // Atomic rename
-                if (!tempFile.renameTo(targetFile)) {
-                    tempFile.copyTo(targetFile, overwrite = true)
-                    tempFile.delete()
+                    output.flush()
                 }
-            } catch (e: Exception) {
-                tempFile.delete()
-                throw e
             }
+
+            if (!tempFile.renameTo(targetFile)) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+            }
+        } catch (e: Exception) {
+            tempFile.delete()
+            throw e
         }
     }
 
