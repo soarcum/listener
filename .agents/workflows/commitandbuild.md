@@ -22,10 +22,11 @@ $versionNameMatch = [regex]::Match($content, 'versionName\s+"(\d+)\.(\d+)\.(\d+)
 if ($versionNameMatch.Success) {
     $major = $versionNameMatch.Groups[1].Value
     $minor = $versionNameMatch.Groups[2].Value
-    $patch = [int]$versionNameMatch.Groups[3].Value + 1
+    $oldPatch = $versionNameMatch.Groups[3].Value
+    $patch = [int]$oldPatch + 1
     $newVersionName = "$major.$minor.$patch"
-    $oldVersionPattern = [regex]::Escape("$major.$minor.$patch")
-    $content = $content -replace "versionName\s+`"$oldVersionPattern`"", "versionName `"$newVersionName`""
+    $oldVersionName = "$major.$minor.$oldPatch"
+    $content = $content -replace "versionName\s+`"$oldVersionName`"", "versionName `"$newVersionName`""
 }
 # 关键修复：保存为不带 BOM 的 UTF-8
 $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
