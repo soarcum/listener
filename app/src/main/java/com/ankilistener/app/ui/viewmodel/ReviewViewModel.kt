@@ -192,12 +192,18 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         // Prepare concept queue for this card
         prepareConceptQueue()
         currentCard?.let {
-            AppLogger.d(TAG, "Showing Back: noteId=${it.id}, ord=${it.ord}")
-            ttsManager.stop()
             val hasConcepts = _dueConceptQueue.value.isNotEmpty()
-            ttsManager.speak(getBackTtsText(it)) {
+            AppLogger.i(TAG, "showBack: noteId=${it.id}, ord=${it.ord}, hasConcepts=$hasConcepts, dueCount=${_dueConceptQueue.value.size}, allCount=${_allConceptsForCurrentCard.value.size}")
+            AppLogger.d(TAG, "showBack: card.back length=${it.back.length}")
+            AppLogger.d(TAG, "showBack: card.back first 300: ${it.back.take(300)}")
+            ttsManager.stop()
+            val backTtsText = getBackTtsText(it)
+            AppLogger.d(TAG, "showBack: backTtsText length=${backTtsText.length}")
+            ttsManager.speak(backTtsText) {
+                AppLogger.d(TAG, "showBack: TTS finished callback, hasConcepts=$hasConcepts, state=${_reviewState.value}")
                 // After back TTS finishes, auto-start concept flow if there are due concepts
                 if (hasConcepts && _reviewState.value == ReviewState.BACK) {
+                    AppLogger.i(TAG, "showBack: auto-starting concept flow")
                     startConceptFlow()
                 }
             }
@@ -205,23 +211,38 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     }
 
     private fun prepareConceptQueue() {
-        val card = currentCard ?: return
-        if (!settingsRepository.getConceptReviewEnabled()) {
+        val card = currentCard
+        if (card == null) {
+            AppLogger.w(TAG, "prepareConceptQueue: currentCard is null!")
+            return
+        }
+        val conceptEnabled = settingsRepository.getConceptReviewEnabled()
+        AppLogger.i(TAG, "prepareConceptQueue: noteId=${card.id}, ord=${card.ord}, conceptEnabled=$conceptEnabled")
+        if (!conceptEnabled) {
+            AppLogger.i(TAG, "prepareConceptQueue: concept review disabled, skipping")
             _allConceptsForCurrentCard.value = emptyList()
             _dueConceptQueue.value = emptyList()
             _conceptReviewResults.value = emptyMap()
             return
         }
+        AppLogger.d(TAG, "prepareConceptQueue: calling ConceptCardParser.parse()")
         val concepts = ConceptCardParser.parse(card.back, card.id, card.ord)
+        AppLogger.i(TAG, "prepareConceptQueue: parsed ${concepts.size} concepts")
+        for ((i, c) in concepts.withIndex()) {
+            AppLogger.d(TAG, "prepareConceptQueue: concept[$i] id=${c.id}, title=${c.title}, q=${c.question.take(50)}")
+        }
         _allConceptsForCurrentCard.value = concepts
         _conceptReviewResults.value = emptyMap()
 
         val now = System.currentTimeMillis()
         val dueOnly = settingsRepository.getConceptDueOnly()
+        AppLogger.d(TAG, "prepareConceptQueue: dueOnly=$dueOnly, now=$now")
         val due = if (dueOnly) {
             concepts.filter { c ->
                 val key = conceptScheduleRepository.buildKey(card.id, card.ord, c.id)
-                conceptScheduleRepository.isDue(key, now)
+                val isDue = conceptScheduleRepository.isDue(key, now)
+                AppLogger.d(TAG, "prepareConceptQueue: concept ${c.id} key=$key isDue=$isDue")
+                isDue
             }
         } else {
             concepts
@@ -229,10 +250,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
         _dueConceptQueue.value = due
         _currentConceptIndex.value = 0
-
-        if (due.isNotEmpty()) {
-            AppLogger.i(TAG, "Card has ${due.size} due concepts out of ${concepts.size} total")
-        }
+        AppLogger.i(TAG, "prepareConceptQueue: ${due.size} due concepts out of ${concepts.size} total")
     }
 
     private fun startConceptFlow() {
