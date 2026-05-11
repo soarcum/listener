@@ -35,7 +35,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.ankilistener.app.data.ConceptReviewState
 import com.ankilistener.app.ui.viewmodel.AiAnswerPhase
 import com.ankilistener.app.ui.viewmodel.AiAnswerUiState
 import com.ankilistener.app.ui.viewmodel.ReviewState
@@ -199,8 +198,27 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         lineHeight = (32 * fontScale).sp
                     )
                 } else if (state == ReviewState.BACK || state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) {
+                    // Show question (smaller)
                     Text(
-                        text = parseHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back)).toAnnotatedString(),
+                        text = parseHtml(it.front).toAnnotatedString(),
+                        fontSize = (16 * fontScale).sp,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = (22 * fontScale).sp
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Divider(
+                        modifier = Modifier.fillMaxWidth(0.6f),
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    // Show answer only (without duplicated question), with concept link highlighting
+                    val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back))
+                    val conceptColorMap = viewModel.getConceptColorMap()
+                    val defaultColor = MaterialTheme.colorScheme.primary
+                    Text(
+                        text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
                         fontSize = (22 * fontScale).sp,
                         textAlign = TextAlign.Center,
                         lineHeight = (30 * fontScale).sp
@@ -211,15 +229,9 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
 
         // Concept overlay dialog
         if ((state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) && concept != null) {
-            // Get concept review state for color coding
-            val conceptReviewState = viewModel.getCurrentConceptReviewState()
-            val conceptHighlightColor = when (conceptReviewState?.lastEase) {
-                ConceptReviewState.EASE_AGAIN -> MaterialTheme.colorScheme.error
-                ConceptReviewState.EASE_HARD -> Color(0xFFFF9800) // Orange
-                ConceptReviewState.EASE_GOOD -> MaterialTheme.colorScheme.primary
-                ConceptReviewState.EASE_EASY -> Color(0xFF4CAF50) // Green
-                else -> MaterialTheme.colorScheme.primary
-            }
+            // Get concept color map for highlighting
+            val conceptColorMap = viewModel.getConceptColorMap()
+            val defaultColor = MaterialTheme.colorScheme.primary
 
             Box(
                 modifier = Modifier
@@ -261,7 +273,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
                             Text(
-                                text = parseConceptLinks(concept.question, conceptHighlightColor),
+                                text = parseConceptLinks(concept.question, defaultColor, conceptColorMap),
                                 fontSize = (20 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 lineHeight = (28 * fontScale).sp
@@ -269,7 +281,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         } else {
                             // CONCEPT_BACK
                             Text(
-                                text = parseConceptLinks(concept.question, conceptHighlightColor),
+                                text = parseConceptLinks(concept.question, defaultColor, conceptColorMap),
                                 fontSize = (15 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -283,7 +295,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = parseConceptLinks(concept.answer, conceptHighlightColor),
+                                text = parseConceptLinks(concept.answer, defaultColor, conceptColorMap),
                                 fontSize = (20 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 lineHeight = (28 * fontScale).sp

@@ -39,9 +39,14 @@ object HtmlUtils {
     /**
      * Converts [[concept]] links to annotated string with highlighting.
      * @param text The text containing [[concept]] links
-     * @param highlightColor The color to use for highlighting concept links
+     * @param defaultColor The default color for concept links without specific state
+     * @param conceptColorMap Optional map of concept title/id to specific colors (for review state)
      */
-    fun parseConceptLinks(text: String, highlightColor: Color): AnnotatedString {
+    fun parseConceptLinks(
+        text: String,
+        defaultColor: Color,
+        conceptColorMap: Map<String, Color> = emptyMap()
+    ): AnnotatedString {
         val pattern = Regex("\\[\\[([^\\]]+)\\]\\]")
         return buildAnnotatedString {
             var lastIndex = 0
@@ -50,10 +55,11 @@ object HtmlUtils {
                 append(text.substring(lastIndex, match.range.first))
                 // Append the concept name without [[]] and with highlighting
                 val conceptName = match.groupValues[1]
+                val color = conceptColorMap[conceptName] ?: defaultColor
                 pushStyle(SpanStyle(
-                    color = highlightColor,
+                    color = color,
                     fontWeight = FontWeight.Bold,
-                    background = highlightColor.copy(alpha = 0.1f)
+                    background = color.copy(alpha = 0.1f)
                 ))
                 append(conceptName)
                 pop()
@@ -123,5 +129,20 @@ object HtmlUtils {
         val parts = html.split(Regex("<hr\\s+id=[\"']?answer[\"']?\\s*/?>", RegexOption.IGNORE_CASE))
         val answerPart = if (parts.size > 1) parts.last() else html
         return extractTtsText(answerPart)
+    }
+
+    /**
+     * Extracts only the answer part (after <hr id=answer>) as plain text
+     * while preserving [[]] concept links for further processing.
+     */
+    fun extractAnswerOnlyHtml(html: String): String {
+        // Anki standard separator for back side
+        val parts = html.split(Regex("<hr\\s+id=[\"']?answer[\"']?\\s*/?>", RegexOption.IGNORE_CASE))
+        val answerHtml = if (parts.size > 1) parts.last().trim() else html
+        // Remove HTML tags but preserve [[]] links
+        return answerHtml
+            .replace(Regex("<[^>]+>"), "") // Remove HTML tags
+            .replace(Regex("\\s+"), " ") // Normalize whitespace
+            .trim()
     }
 }

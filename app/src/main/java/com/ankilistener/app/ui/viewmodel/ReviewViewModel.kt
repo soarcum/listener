@@ -2,6 +2,7 @@ package com.ankilistener.app.ui.viewmodel
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ankilistener.app.data.AiAnswerApiClient
@@ -126,6 +127,35 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         val card = currentCard ?: return null
         val key = conceptScheduleRepository.buildKey(card.id, card.ord, concept.id)
         return conceptScheduleRepository.getState(key)
+    }
+
+    /**
+     * Returns a map of concept title/id to color based on their review state.
+     * Used for highlighting [[concept]] links in the card back.
+     */
+    fun getConceptColorMap(): Map<String, Color> {
+        val card = currentCard ?: return emptyMap()
+        val concepts = _allConceptsForCurrentCard.value
+        if (concepts.isEmpty()) return emptyMap()
+
+        val colorMap = mutableMapOf<String, Color>()
+        for (concept in concepts) {
+            val key = conceptScheduleRepository.buildKey(card.id, card.ord, concept.id)
+            val state = conceptScheduleRepository.getState(key)
+            val color = when (state?.lastEase) {
+                ConceptReviewState.EASE_AGAIN -> Color(0xFFE53935) // Red
+                ConceptReviewState.EASE_HARD -> Color(0xFFFF9800) // Orange
+                ConceptReviewState.EASE_GOOD -> Color(0xFF1E88E5) // Blue
+                ConceptReviewState.EASE_EASY -> Color(0xFF43A047) // Green
+                else -> Color(0xFF1E88E5) // Default blue for new concepts
+            }
+            // Map both title and id for matching
+            if (concept.title.isNotBlank()) {
+                colorMap[concept.title] = color
+            }
+            colorMap[concept.id] = color
+        }
+        return colorMap
     }
 
     private val _conceptReviewResults = mutableStateOf<Map<String, Int>>(emptyMap())
