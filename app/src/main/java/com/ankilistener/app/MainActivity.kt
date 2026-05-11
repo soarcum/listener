@@ -80,7 +80,8 @@ class MainActivity : ComponentActivity() {
         // Set up global crash handler first, before any initialization that might crash
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            AppLogger.e("CRASH", "Uncaught exception in ${thread.name}", throwable)
+            val stackTrace = throwable?.stackTraceToString() ?: "no stack trace"
+            AppLogger.e("CRASH", "Uncaught exception in ${thread.name}: ${throwable?.message}\n$stackTrace")
             // Give logger time to persist
             Thread.sleep(100)
             defaultHandler?.uncaughtException(thread, throwable)

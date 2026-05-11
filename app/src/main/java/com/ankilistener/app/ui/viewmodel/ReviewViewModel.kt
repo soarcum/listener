@@ -142,19 +142,24 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         currentDeckId = deckId
         AppLogger.i(TAG, "startReview(deckId=$deckId)")
         viewModelScope.launch {
-            _reviewState.value = ReviewState.LOADING
-            val cards = withContext(Dispatchers.IO) {
-                repository.getCardsToReview(deckId)
-            }
-            AppLogger.i(TAG, "Fetched ${cards.size} cards for review")
-            settingsRepository.setLastDeckId(deckId)
-            _currentCards.value = cards
-            _currentIndex.value = 0
-            if (cards.isNotEmpty()) {
-                showFront()
-                prefetchUpcoming()
-            } else {
-                finishReview()
+            try {
+                _reviewState.value = ReviewState.LOADING
+                val cards = withContext(Dispatchers.IO) {
+                    repository.getCardsToReview(deckId)
+                }
+                AppLogger.i(TAG, "Fetched ${cards.size} cards for review")
+                settingsRepository.setLastDeckId(deckId)
+                _currentCards.value = cards
+                _currentIndex.value = 0
+                if (cards.isNotEmpty()) {
+                    showFront()
+                    prefetchUpcoming()
+                } else {
+                    finishReview()
+                }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "startReview failed", e)
+                _reviewState.value = ReviewState.FINISHED
             }
         }
     }
@@ -162,10 +167,14 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private fun showFront() {
         _reviewState.value = ReviewState.FRONT
         currentCard?.let {
-            resetAiSessionForCard(it)
-            _questionPlaybackFinished.value = false
-            AppLogger.d(TAG, "Showing Front: noteId=${it.id}, ord=${it.ord}, index=${_currentIndex.value}")
-            speakFrontQuestion(it)
+            try {
+                resetAiSessionForCard(it)
+                _questionPlaybackFinished.value = false
+                AppLogger.d(TAG, "Showing Front: noteId=${it.id}, ord=${it.ord}, index=${_currentIndex.value}")
+                speakFrontQuestion(it)
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "showFront failed for noteId=${it.id}", e)
+            }
         }
     }
 
