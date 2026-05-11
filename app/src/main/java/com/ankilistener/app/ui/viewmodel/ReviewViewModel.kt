@@ -121,6 +121,13 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     val currentConcept: ConceptCard?
         get() = _dueConceptQueue.value.getOrNull(_currentConceptIndex.value)
 
+    fun getCurrentConceptReviewState(): ConceptReviewState? {
+        val concept = currentConcept ?: return null
+        val card = currentCard ?: return null
+        val key = conceptScheduleRepository.buildKey(card.id, card.ord, concept.id)
+        return conceptScheduleRepository.getState(key)
+    }
+
     private val _conceptReviewResults = mutableStateOf<Map<String, Int>>(emptyMap())
     val conceptReviewResults: State<Map<String, Int>> = _conceptReviewResults
 
@@ -331,11 +338,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun getBackTtsText(card: Card): String {
         val cleaned = HtmlUtils.removeAnkiListenerConceptBlocks(card.back)
-        return if (settingsRepository.getSkipQuestionOnBack()) {
-            HtmlUtils.extractAnswerOnly(cleaned)
-        } else {
-            HtmlUtils.extractTtsText(cleaned)
-        }
+        return HtmlUtils.extractTtsText(cleaned)
     }
 
     private fun resetAiSessionForCard(card: Card) {

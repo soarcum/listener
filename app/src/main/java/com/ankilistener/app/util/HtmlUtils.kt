@@ -37,6 +37,36 @@ object HtmlUtils {
     }
 
     /**
+     * Converts [[concept]] links to annotated string with highlighting.
+     * @param text The text containing [[concept]] links
+     * @param highlightColor The color to use for highlighting concept links
+     */
+    fun parseConceptLinks(text: String, highlightColor: Color): AnnotatedString {
+        val pattern = Regex("\\[\\[([^\\]]+)\\]\\]")
+        return buildAnnotatedString {
+            var lastIndex = 0
+            pattern.findAll(text).forEach { match ->
+                // Append text before the match
+                append(text.substring(lastIndex, match.range.first))
+                // Append the concept name without [[]] and with highlighting
+                val conceptName = match.groupValues[1]
+                pushStyle(SpanStyle(
+                    color = highlightColor,
+                    fontWeight = FontWeight.Bold,
+                    background = highlightColor.copy(alpha = 0.1f)
+                ))
+                append(conceptName)
+                pop()
+                lastIndex = match.range.last + 1
+            }
+            // Append remaining text
+            if (lastIndex < text.length) {
+                append(text.substring(lastIndex))
+            }
+        }
+    }
+
+    /**
      * Converts a Spanned object to Compose AnnotatedString.
      */
     fun Spanned.toAnnotatedString(): AnnotatedString {

@@ -82,30 +82,6 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 }
             }
 
-            // Skip Question on Back toggle
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("背面自动跳过问题", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "在显示答案时，不重复朗读卡片正面的问题内容",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = ttsSettings.skipQuestionOnBack,
-                        onCheckedChange = { viewModel.updateSkipQuestionOnBack(it) }
-                    )
-                }
-            }
-
             // API Settings (only visible when API provider is selected)
             if (ttsSettings.provider == TtsProvider.API) {
                 item {

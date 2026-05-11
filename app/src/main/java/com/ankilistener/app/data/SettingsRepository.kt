@@ -126,14 +126,6 @@ class SettingsRepository(context: Context) {
     }
 
 
-    fun getSkipQuestionOnBack(): Boolean {
-        return ttsPrefs.getBoolean("skip_question_on_back", false)
-    }
-
-    fun setSkipQuestionOnBack(skip: Boolean) {
-        ttsPrefs.edit().putBoolean("skip_question_on_back", skip).apply()
-    }
-
     fun getLastDeckId(): Long {
         return ttsPrefs.getLong("last_deck_id", -1L)
     }
