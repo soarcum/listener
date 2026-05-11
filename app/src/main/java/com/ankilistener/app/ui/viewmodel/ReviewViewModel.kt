@@ -723,8 +723,24 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private fun handleGesture(gestureType: GestureType) {
         val mappings = settingsRepository.getAllMappings()
         val actionsForGesture = mappings.filter { it.value == gestureType }.keys
-        
+
         if (actionsForGesture.isEmpty()) return
+
+        // In BACK state with pending concepts, answer or show-answer gestures enter concept flow
+        if (_reviewState.value == ReviewState.BACK) {
+            val pendingCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
+            val conceptEntryActions = setOf(
+                GestureAction.SHOW_ANSWER,
+                GestureAction.ANSWER_AGAIN, GestureAction.ANSWER_HARD,
+                GestureAction.ANSWER_GOOD, GestureAction.ANSWER_EASY
+            )
+            if (pendingCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
+                AppLogger.i(TAG, "Gesture in BACK with $pendingCount pending concepts -> entering concept flow")
+                ttsManager.stop()
+                startConceptFlow()
+                return
+            }
+        }
 
         val action = when (_reviewState.value) {
             ReviewState.FRONT -> {

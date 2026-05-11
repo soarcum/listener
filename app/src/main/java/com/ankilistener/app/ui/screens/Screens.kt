@@ -196,7 +196,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         textAlign = TextAlign.Center,
                         lineHeight = (32 * fontScale).sp
                     )
-                } else if (state == ReviewState.BACK) {
+                } else if (state == ReviewState.BACK || state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) {
                     Text(
                         text = parseHtml(it.front).toAnnotatedString(),
                         fontSize = (16 * fontScale).sp,
@@ -217,63 +217,81 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         textAlign = TextAlign.Center,
                         lineHeight = (30 * fontScale).sp
                     )
-                } else if (state == ReviewState.CONCEPT_FRONT && concept != null) {
-                    // Concept progress
-                    Text(
-                        text = "概念 ${currentConceptIdx + 1}/${dueConcepts.size}",
-                        fontSize = (14 * fontScale).sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    // Concept title
-                    if (concept.title.isNotBlank()) {
+                }
+            }
+        }
+
+        // Concept overlay dialog
+        if ((state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) && concept != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .padding(vertical = 32.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Progress badge
                         Text(
-                            text = concept.title,
-                            fontSize = (18 * fontScale).sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
+                            text = "概念 ${currentConceptIdx + 1}/${dueConcepts.size}",
+                            fontSize = (13 * fontScale).sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (state == ReviewState.CONCEPT_FRONT) {
+                            if (concept.title.isNotBlank()) {
+                                Text(
+                                    text = concept.title,
+                                    fontSize = (18 * fontScale).sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                            Text(
+                                text = concept.question,
+                                fontSize = (20 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = (28 * fontScale).sp
+                            )
+                        } else {
+                            // CONCEPT_BACK
+                            Text(
+                                text = concept.question,
+                                fontSize = (15 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = (21 * fontScale).sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Divider(
+                                modifier = Modifier.fillMaxWidth(0.5f),
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = concept.answer,
+                                fontSize = (20 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = (28 * fontScale).sp
+                            )
+                        }
                     }
-                    // Concept question
-                    Text(
-                        text = concept.question,
-                        fontSize = (22 * fontScale).sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = (30 * fontScale).sp
-                    )
-                } else if (state == ReviewState.CONCEPT_BACK && concept != null) {
-                    // Concept progress
-                    Text(
-                        text = "概念 ${currentConceptIdx + 1}/${dueConcepts.size}",
-                        fontSize = (14 * fontScale).sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    // Concept question (dimmed)
-                    Text(
-                        text = concept.question,
-                        fontSize = (16 * fontScale).sp,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = (22 * fontScale).sp
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Divider(
-                        modifier = Modifier.fillMaxWidth(0.6f),
-                        thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    // Concept answer
-                    Text(
-                        text = concept.answer,
-                        fontSize = (22 * fontScale).sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = (30 * fontScale).sp
-                    )
                 }
             }
         }
