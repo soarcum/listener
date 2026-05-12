@@ -4,6 +4,11 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.ankilistener.app.util.TtsProvider
 
+enum class TtsScheme {
+    SYSTEM,  // Android built-in TextToSpeech
+    API      // Remote HTTP TTS API (Legado-compatible)
+}
+
 enum class ThemeMode {
     SYSTEM,
     LIGHT,
@@ -89,6 +94,27 @@ class SettingsRepository(context: Context) {
 
     fun setTtsProvider(provider: TtsProvider) {
         ttsPrefs.edit().putString("tts_provider", provider.name).apply()
+    }
+
+    fun getTtsScheme(): TtsScheme {
+        val name = ttsPrefs.getString("tts_scheme", TtsScheme.SYSTEM.name) ?: TtsScheme.SYSTEM.name
+        return try {
+            TtsScheme.valueOf(name)
+        } catch (e: Exception) {
+            TtsScheme.SYSTEM
+        }
+    }
+
+    fun setTtsScheme(scheme: TtsScheme) {
+        ttsPrefs.edit().putString("tts_scheme", scheme.name).apply()
+    }
+
+    fun getTtsApiAddress(): String {
+        return ttsPrefs.getString("tts_api_address", "") ?: ""
+    }
+
+    fun setTtsApiAddress(address: String) {
+        ttsPrefs.edit().putString("tts_api_address", address).apply()
     }
 
     fun getTtsBaseUrl(): String {

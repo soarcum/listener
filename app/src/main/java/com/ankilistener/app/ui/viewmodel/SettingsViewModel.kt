@@ -7,12 +7,15 @@ import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.data.ThemeMode
+import com.ankilistener.app.data.TtsScheme
 import com.ankilistener.app.util.TtsAudioCache
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.TtsProvider
 
 data class TtsSettings(
     val provider: TtsProvider = TtsProvider.SYSTEM,
+    val scheme: TtsScheme = TtsScheme.SYSTEM,
+    val apiAddress: String = "",
     val baseUrl: String = SettingsRepository.DEFAULT_BASE_URL,
     val speed: String = "1.0",
     val delay: String = "5",
@@ -65,6 +68,8 @@ class SettingsViewModel(
         _gestureMappings.value = settingsRepository.getAllMappings()
         _ttsSettings.value = TtsSettings(
             provider = settingsRepository.getTtsProvider(),
+            scheme = settingsRepository.getTtsScheme(),
+            apiAddress = settingsRepository.getTtsApiAddress(),
             baseUrl = settingsRepository.getTtsBaseUrl(),
             speed = settingsRepository.getTtsSpeed(),
             delay = settingsRepository.getTtsDelay(),
@@ -117,6 +122,33 @@ class SettingsViewModel(
     fun updateTtsProvider(provider: TtsProvider) {
         settingsRepository.setTtsProvider(provider)
         _ttsSettings.value = _ttsSettings.value.copy(provider = provider)
+        applyTtsConfig()
+    }
+
+    fun updateTtsScheme(scheme: TtsScheme) {
+        settingsRepository.setTtsScheme(scheme)
+        val hasAddress = _ttsSettings.value.apiAddress.isNotBlank()
+        val provider = if (scheme == TtsScheme.API && hasAddress) TtsProvider.API else TtsProvider.SYSTEM
+        settingsRepository.setTtsProvider(provider)
+        _ttsSettings.value = _ttsSettings.value.copy(scheme = scheme, provider = provider)
+        applyTtsConfig()
+    }
+
+    fun updateTtsApiAddress(address: String) {
+        settingsRepository.setTtsApiAddress(address)
+        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = address)
+        if (address.isNotBlank()) {
+            updateTtsBaseUrl(address)
+            settingsRepository.setTtsProvider(TtsProvider.API)
+            _ttsSettings.value = _ttsSettings.value.copy(provider = TtsProvider.API)
+            applyTtsConfig()
+        }
+    }
+
+    fun clearTtsApiAddress() {
+        settingsRepository.setTtsApiAddress("")
+        settingsRepository.setTtsProvider(TtsProvider.SYSTEM)
+        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = "", provider = TtsProvider.SYSTEM)
         applyTtsConfig()
     }
 

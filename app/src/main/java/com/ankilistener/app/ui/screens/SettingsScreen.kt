@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.ThemeMode
+import com.ankilistener.app.data.TtsScheme
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.TtsProvider
 import com.ankilistener.app.util.UpdateManager
@@ -102,194 +104,33 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 )
             }
 
-            // Provider Switch
+            // Scheme Selection: System TTS / Online API
             item {
-                Row(
+                SingleChoiceSegmentedButtonRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text("使用在线TTS接口", style = MaterialTheme.typography.bodyLarge)
-                    Switch(
-                        checked = ttsSettings.provider == TtsProvider.API,
-                        onCheckedChange = { isApi ->
-                            viewModel.updateTtsProvider(if (isApi) TtsProvider.API else TtsProvider.SYSTEM)
-                        }
+                    val options = listOf(
+                        TtsScheme.SYSTEM to "系统TTS",
+                        TtsScheme.API to "在线API"
                     )
+                    options.forEachIndexed { index, (scheme, label) ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                            onClick = { viewModel.updateTtsScheme(scheme) },
+                            selected = ttsSettings.scheme == scheme
+                        ) {
+                            Text(label)
+                        }
+                    }
                 }
             }
 
-            // API Settings (only visible when API provider is selected)
-            if (ttsSettings.provider == TtsProvider.API) {
+            // API Scheme: Address Card + Config (only when API is selected)
+            if (ttsSettings.scheme == TtsScheme.API) {
                 item {
-                    TtsTextField(
-                        label = "服务器地址",
-                        value = ttsSettings.baseUrl,
-                        placeholder = "http://172.22.64.1:3000",
-                        onValueChange = { viewModel.updateTtsBaseUrl(it) }
-                    )
-                }
-                item {
-                    TtsTextField(
-                        label = "语速 (speakSpeed)",
-                        value = ttsSettings.speed,
-                        placeholder = "1.0",
-                        keyboardType = KeyboardType.Decimal,
-                        onValueChange = { viewModel.updateTtsSpeed(it) }
-                    )
-                }
-                item {
-                    TtsTextField(
-                        label = "延迟 (delay)",
-                        value = ttsSettings.delay,
-                        placeholder = "5",
-                        keyboardType = KeyboardType.Number,
-                        onValueChange = { viewModel.updateTtsDelay(it) }
-                    )
-                }
-                item {
-                    TtsTextField(
-                        label = "音色 (voice)",
-                        value = ttsSettings.voice,
-                        placeholder = "zh_female_wenroutaozi_uranus_bigtts",
-                        onValueChange = { viewModel.updateTtsVoice(it) }
-                    )
-                }
-                item {
-                    Text(
-                        "兼容阅读(legado)的TTS接口格式",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
-                }
-
-                // ---- Prefetch & Cache Section ----
-                item {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-
-                item {
-                    Text(
-                        "预加载与缓存",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
-                }
-
-                // Prefetch count slider
-                item {
-                    var textValue by remember(ttsSettings.prefetchCount) {
-                        mutableStateOf(ttsSettings.prefetchCount.toString())
-                    }
-                    TtsTextField(
-                        label = "预加载卡片数",
-                        value = textValue,
-                        placeholder = "3",
-                        keyboardType = KeyboardType.Number,
-                        onValueChange = { newValue ->
-                            // Allow digits only
-                            if (newValue.all { it.isDigit() }) {
-                                textValue = newValue
-                                val count = newValue.toIntOrNull()
-                                if (count != null) {
-                                    viewModel.updatePrefetchCount(count)
-                                } else if (newValue.isEmpty()) {
-                                    viewModel.updatePrefetchCount(0)
-                                }
-                            }
-                        }
-                    )
-
-                    Text(
-                        "提前下载接下来的卡片音频，0 = 不预加载",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    )
-                }
-
-
-                // Cache stats
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("缓存统计", style = MaterialTheme.typography.titleSmall)
-                                Row {
-                                    IconButton(
-                                        onClick = { viewModel.refreshCacheStats() },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Refresh,
-                                            contentDescription = "刷新",
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    "已缓存音频",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    "${cacheStats.fileCount} 条",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    "占用空间",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    "${cacheStats.totalSizeMB} MB",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedButton(
-                                onClick = { viewModel.clearCache() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("清除所有缓存")
-                            }
-                        }
-                    }
+                    TtsApiSchemeCard(viewModel, ttsSettings)
                 }
             }
 
@@ -521,6 +362,249 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 }
 
 @Composable
+private fun TtsApiSchemeCard(
+    viewModel: SettingsViewModel,
+    ttsSettings: com.ankilistener.app.ui.viewmodel.TtsSettings
+) {
+    var showAddressInput by remember { mutableStateOf(ttsSettings.apiAddress.isBlank()) }
+    var editedAddress by remember { mutableStateOf(ttsSettings.apiAddress) }
+
+    LaunchedEffect(ttsSettings.apiAddress) {
+        if (ttsSettings.apiAddress.isBlank()) {
+            showAddressInput = true
+            editedAddress = ""
+        }
+    }
+
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        // Address Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                if (ttsSettings.apiAddress.isNotBlank()) {
+                    // Address display with actions
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("当前地址", style = MaterialTheme.typography.titleSmall)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                ttsSettings.apiAddress,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Row {
+                            IconButton(onClick = { showAddressInput = true }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.Default.Create,
+                                    contentDescription = "编辑",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            IconButton(onClick = {
+                                viewModel.clearTtsApiAddress()
+                                showAddressInput = true
+                            }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "删除",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (showAddressInput) {
+                    if (ttsSettings.apiAddress.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = editedAddress,
+                            onValueChange = { editedAddress = it },
+                            label = { Text("输入地址") },
+                            placeholder = { Text("http://172.22.64.1:3000") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(onClick = {
+                            if (editedAddress.isNotBlank()) {
+                                viewModel.updateTtsApiAddress(editedAddress.trim())
+                                showAddressInput = false
+                            }
+                        }) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "确认",
+                                tint = if (editedAddress.isNotBlank())
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Config fields (only when address is set)
+        if (ttsSettings.apiAddress.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            TtsTextField(
+                label = "语速 (speakSpeed)",
+                value = ttsSettings.speed,
+                placeholder = "1.0",
+                keyboardType = KeyboardType.Decimal,
+                onValueChange = { viewModel.updateTtsSpeed(it) }
+            )
+            TtsTextField(
+                label = "延迟 (delay)",
+                value = ttsSettings.delay,
+                placeholder = "5",
+                keyboardType = KeyboardType.Number,
+                onValueChange = { viewModel.updateTtsDelay(it) }
+            )
+            TtsTextField(
+                label = "音色 (voice)",
+                value = ttsSettings.voice,
+                placeholder = "zh_female_wenroutaozi_uranus_bigtts",
+                onValueChange = { viewModel.updateTtsVoice(it) }
+            )
+            Text(
+                "兼容阅读(legado)的TTS接口格式",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+
+            // Prefetch & Cache
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            Text(
+                "预加载与缓存",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+
+            var prefetchText by remember(ttsSettings.prefetchCount) {
+                mutableStateOf(ttsSettings.prefetchCount.toString())
+            }
+            TtsTextField(
+                label = "预加载卡片数",
+                value = prefetchText,
+                placeholder = "3",
+                keyboardType = KeyboardType.Number,
+                onValueChange = { newValue ->
+                    if (newValue.all { it.isDigit() }) {
+                        prefetchText = newValue
+                        val count = newValue.toIntOrNull()
+                        if (count != null) {
+                            viewModel.updatePrefetchCount(count)
+                        } else if (newValue.isEmpty()) {
+                            viewModel.updatePrefetchCount(0)
+                        }
+                    }
+                }
+            )
+            Text(
+                "提前下载接下来的卡片音频，0 = 不预加载",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            CacheStatsCard(viewModel)
+        }
+    }
+}
+
+@Composable
+private fun CacheStatsCard(viewModel: SettingsViewModel) {
+    val cacheStats by viewModel.cacheStats
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("缓存统计", style = MaterialTheme.typography.titleSmall)
+                IconButton(
+                    onClick = { viewModel.refreshCacheStats() },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "刷新",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("已缓存音频", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "${cacheStats.fileCount} 条",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("占用空间", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "${cacheStats.totalSizeMB} MB",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = { viewModel.clearCache() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("清除所有缓存")
+            }
+        }
+    }
+}
+
+@Composable
 fun TtsTextField(
     label: String,
     value: String,
@@ -537,7 +621,7 @@ fun TtsTextField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(vertical = 4.dp)
     )
 }
 
