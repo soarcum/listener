@@ -4,6 +4,12 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.ankilistener.app.util.TtsProvider
 
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK
+}
+
 enum class GestureAction {
     NONE,
     SKIP,
@@ -203,5 +209,20 @@ class SettingsRepository(context: Context) {
 
     fun setAiFollowUpEnabled(enabled: Boolean) {
         aiPrefs.edit().putBoolean("follow_up_enabled", enabled).apply()
+    }
+
+    // ---- Theme Settings ----
+
+    fun getThemeMode(): ThemeMode {
+        val name = ttsPrefs.getString("theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
+        return try {
+            ThemeMode.valueOf(name)
+        } catch (e: Exception) {
+            ThemeMode.SYSTEM
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        ttsPrefs.edit().putString("theme_mode", mode.name).apply()
     }
 }

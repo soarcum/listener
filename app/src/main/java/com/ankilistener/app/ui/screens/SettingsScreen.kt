@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
+import com.ankilistener.app.data.ThemeMode
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.TtsProvider
 import com.ankilistener.app.util.UpdateManager
@@ -30,6 +31,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val aiSettings by viewModel.aiSettings
     val conceptSettings by viewModel.conceptSettings
     val cacheStats by viewModel.cacheStats
+    val themeMode by viewModel.themeMode
 
     // Refresh cache stats when entering settings
     LaunchedEffect(Unit) {
@@ -53,6 +55,43 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // ---- Theme Settings Section ----
+            item {
+                Text(
+                    "外观",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+
+            item {
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    val options = listOf(
+                        ThemeMode.SYSTEM to "跟随系统",
+                        ThemeMode.LIGHT to "浅色",
+                        ThemeMode.DARK to "深色"
+                    )
+                    options.forEachIndexed { index, (mode, label) ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                            onClick = { viewModel.updateThemeMode(mode) },
+                            selected = themeMode == mode
+                        ) {
+                            Text(label)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+
             // ---- TTS Settings Section ----
             item {
                 Text(

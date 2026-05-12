@@ -19,6 +19,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +47,7 @@ import com.ankilistener.app.data.AiReviewRepository
 import com.ankilistener.app.data.AnkiRepository
 import com.ankilistener.app.data.ConceptScheduleRepository
 import com.ankilistener.app.data.SettingsRepository
+import com.ankilistener.app.data.ThemeMode
 import com.ankilistener.app.ui.screens.DeckSelectionScreen
 import com.ankilistener.app.ui.screens.LogViewerScreen
 import com.ankilistener.app.ui.screens.PermissionScreen
@@ -145,7 +149,18 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            MaterialTheme {
+            val initialThemeMode = remember { settingsRepository.getThemeMode() }
+            var themeMode by remember { mutableStateOf(initialThemeMode) }
+
+            val darkTheme = when (themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+
+            val colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()
+
+            MaterialTheme(colorScheme = colorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -182,6 +197,8 @@ class MainActivity : ComponentActivity() {
                                 return SettingsViewModel(settingsRepository, ttsManager) as T
                             }
                         }
+                        val settingsVm: SettingsViewModel = viewModel(factory = settingsFactory)
+                        themeMode = settingsVm.themeMode.value
                         MainNavigation(reviewFactory, settingsFactory)
                     }
                 }

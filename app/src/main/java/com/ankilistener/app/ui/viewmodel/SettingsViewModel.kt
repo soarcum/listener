@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
+import com.ankilistener.app.data.ThemeMode
 import com.ankilistener.app.util.TtsAudioCache
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.TtsProvider
@@ -53,6 +54,9 @@ class SettingsViewModel(
     private val _conceptSettings = mutableStateOf(ConceptSettings())
     val conceptSettings: State<ConceptSettings> = _conceptSettings
 
+    private val _themeMode = mutableStateOf(ThemeMode.SYSTEM)
+    val themeMode: State<ThemeMode> = _themeMode
+
     init {
         loadSettings()
     }
@@ -79,6 +83,7 @@ class SettingsViewModel(
             dueOnly = settingsRepository.getConceptDueOnly(),
             againDelayMinutes = settingsRepository.getConceptAgainDelayMinutes()
         )
+        _themeMode.value = settingsRepository.getThemeMode()
         refreshCacheStats()
     }
 
@@ -184,5 +189,10 @@ class SettingsViewModel(
     fun updateConceptAgainDelayMinutes(minutes: Int) {
         settingsRepository.setConceptAgainDelayMinutes(minutes)
         _conceptSettings.value = _conceptSettings.value.copy(againDelayMinutes = minutes)
+    }
+
+    fun updateThemeMode(mode: ThemeMode) {
+        settingsRepository.setThemeMode(mode)
+        _themeMode.value = mode
     }
 }
