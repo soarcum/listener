@@ -3,10 +3,62 @@ package com.ankilistener.app.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.ankilistener.app.util.TtsProvider
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class TtsScheme {
     SYSTEM,  // Android built-in TextToSpeech
     API      // Remote HTTP TTS API (Legado-compatible)
+}
+
+data class TtsSchemeItem(
+    val id: String = System.currentTimeMillis().toString(),
+    val name: String = "",
+    val address: String = "",
+    val apiKey: String = "",
+    val speed: String = "1.0",
+    val delay: String = "5",
+    val voice: String = "zh_female_wenroutaozi_uranus_bigtts"
+)
+
+object TtsSchemeStorage {
+    fun toJson(schemes: List<TtsSchemeItem>): String {
+        val arr = JSONArray()
+        for (s in schemes) {
+            val obj = JSONObject().apply {
+                put("id", s.id)
+                put("name", s.name)
+                put("address", s.address)
+                put("apiKey", s.apiKey)
+                put("speed", s.speed)
+                put("delay", s.delay)
+                put("voice", s.voice)
+            }
+            arr.put(obj)
+        }
+        return arr.toString()
+    }
+
+    fun fromJson(json: String): List<TtsSchemeItem> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                TtsSchemeItem(
+                    id = obj.optString("id", System.currentTimeMillis().toString()),
+                    name = obj.optString("name", ""),
+                    address = obj.optString("address", ""),
+                    apiKey = obj.optString("apiKey", ""),
+                    speed = obj.optString("speed", "1.0"),
+                    delay = obj.optString("delay", "5"),
+                    voice = obj.optString("voice", "zh_female_wenroutaozi_uranus_bigtts")
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 }
 
 enum class ThemeMode {
@@ -123,6 +175,51 @@ class SettingsRepository(context: Context) {
 
     fun setTtsApiKey(key: String) {
         ttsPrefs.edit().putString("tts_api_key", key).apply()
+    }
+
+    // ---- TTS Scheme Management ----
+
+    fun getTtsSchemes(): List<TtsSchemeItem> {
+        val json = ttsPrefs.getString("tts_schemes", "") ?: ""
+        val schemes = TtsSchemeStorage.fromJson(json)
+        if (schemes.isNotEmpty()) return schemes
+        // Migration: convert old single address to first scheme
+        return migrateOldTtsAddress()
+    }
+
+    fun setTtsSchemes(schemes: List<TtsSchemeItem>) {
+        ttsPrefs.edit().putString("tts_schemes", TtsSchemeStorage.toJson(schemes)).apply()
+    }
+
+    fun getActiveSchemeId(): String {
+        return ttsPrefs.getString("tts_active_scheme_id", "") ?: ""
+    }
+
+    fun setActiveSchemeId(id: String) {
+        ttsPrefs.edit().putString("tts_active_scheme_id", id).apply()
+    }
+
+    fun getActiveScheme(): TtsSchemeItem? {
+        val schemes = getTtsSchemes()
+        val activeId = getActiveSchemeId()
+        return schemes.find { it.id == activeId } ?: schemes.firstOrNull()
+    }
+
+    private fun migrateOldTtsAddress(): List<TtsSchemeItem> {
+        val address = getTtsApiAddress()
+        if (address.isBlank()) return emptyList()
+        val scheme = TtsSchemeItem(
+            name = "默认",
+            address = address,
+            apiKey = getTtsApiKey(),
+            speed = getTtsSpeed(),
+            delay = getTtsDelay(),
+            voice = getTtsVoice()
+        )
+        val schemes = listOf(scheme)
+        setTtsSchemes(schemes)
+        setActiveSchemeId(scheme.id)
+        return schemes
     }
 
     fun getTtsBaseUrl(): String {

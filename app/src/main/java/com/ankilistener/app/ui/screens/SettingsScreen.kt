@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +22,7 @@ import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.ThemeMode
 import com.ankilistener.app.data.TtsScheme
+import com.ankilistener.app.data.TtsSchemeItem
 import com.ankilistener.app.ui.viewmodel.SettingsViewModel
 import com.ankilistener.app.util.TtsProvider
 import com.ankilistener.app.util.UpdateManager
@@ -127,10 +129,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 }
             }
 
-            // API Scheme: Address + Key Card + Config (only when API is selected)
+            // API Scheme List (only when API is selected)
             if (ttsSettings.scheme == TtsScheme.API) {
                 item {
-                    TtsApiConfigCard(viewModel, ttsSettings)
+                    TtsSchemeListCard(viewModel, ttsSettings)
                 }
             }
 
@@ -362,29 +364,33 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun TtsApiConfigCard(
+private fun TtsSchemeListCard(
     viewModel: SettingsViewModel,
     ttsSettings: com.ankilistener.app.ui.viewmodel.TtsSettings
 ) {
-    var showInput by remember { mutableStateOf(ttsSettings.apiAddress.isBlank()) }
-    var editedAddress by remember { mutableStateOf(ttsSettings.apiAddress) }
-    var editedKey by remember { mutableStateOf(ttsSettings.apiKey) }
+    var showInput by remember { mutableStateOf(false) }
+    var editingSchemeId by remember { mutableStateOf<String?>(null) }
+    var editedName by remember { mutableStateOf("") }
+    var editedAddress by remember { mutableStateOf("") }
+    var editedKey by remember { mutableStateOf("") }
 
-    LaunchedEffect(ttsSettings.apiAddress, ttsSettings.apiKey) {
-        if (ttsSettings.apiAddress.isBlank()) {
-            showInput = true
+    LaunchedEffect(editingSchemeId) {
+        val scheme = editingSchemeId?.let { id -> ttsSettings.schemes.find { it.id == id } }
+        if (scheme != null) {
+            editedName = scheme.name
+            editedAddress = scheme.address
+            editedKey = scheme.apiKey
+        } else if (showInput) {
+            editedName = ""
             editedAddress = ""
             editedKey = ""
-        } else {
-            editedAddress = ttsSettings.apiAddress
-            editedKey = ttsSettings.apiKey
         }
     }
 
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // ---- Address + Key Card ----
+        // ---- Scheme List ----
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -392,59 +398,64 @@ private fun TtsApiConfigCard(
             )
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                // Display current address + key
-                if (ttsSettings.apiAddress.isNotBlank()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("当前地址", style = MaterialTheme.typography.titleSmall)
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                ttsSettings.apiAddress,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            if (ttsSettings.apiKey.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    "Key: ${ttsSettings.apiKey}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Row {
-                            IconButton(onClick = { showInput = true }, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    Icons.Default.Create,
-                                    contentDescription = "编辑",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            IconButton(onClick = {
-                                viewModel.clearTtsApiConfig()
-                            }, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "删除",
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("已保存方案", style = MaterialTheme.typography.titleSmall)
+                    TextButton(onClick = {
+                        editingSchemeId = null
+                        showInput = true
+                    }) {
+                        Text("+ 添加")
                     }
                 }
 
-                // Input fields (shown when no address, or editing)
+                if (ttsSettings.schemes.isEmpty() && !showInput) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "还没有保存的方案，点击\"+ 添加\"创建",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                ttsSettings.schemes.forEachIndexed { index, scheme ->
+                    if (index > 0) Spacer(modifier = Modifier.height(4.dp))
+                    val isSelected = scheme.id == ttsSettings.activeSchemeId
+                    SchemeRow(
+                        scheme = scheme,
+                        isSelected = isSelected,
+                        onSelect = { viewModel.selectScheme(scheme.id) },
+                        onEdit = {
+                            editingSchemeId = scheme.id
+                            showInput = true
+                        },
+                        onDelete = { viewModel.removeScheme(scheme.id) }
+                    )
+                }
+
+                // Input fields for add/edit
                 if (showInput) {
-                    if (ttsSettings.apiAddress.isNotBlank()) {
+                    if (ttsSettings.schemes.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Divider()
                         Spacer(modifier = Modifier.height(12.dp))
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
+                    OutlinedTextField(
+                        value = editedName,
+                        onValueChange = { editedName = it },
+                        label = { Text("方案名称") },
+                        placeholder = { Text("如：家里服务器") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = editedAddress,
                         onValueChange = { editedAddress = it },
@@ -466,8 +477,26 @@ private fun TtsApiConfigCard(
                     Button(
                         onClick = {
                             if (editedAddress.isNotBlank()) {
-                                viewModel.updateTtsApiAddress(editedAddress.trim(), editedKey.trim())
+                                val id = editingSchemeId
+                                if (id != null) {
+                                    viewModel.updateScheme(
+                                        ttsSettings.schemes.find { it.id == id }!!.copy(
+                                            name = editedName.trim().ifBlank { "未命名" },
+                                            address = editedAddress.trim(),
+                                            apiKey = editedKey.trim()
+                                        )
+                                    )
+                                } else {
+                                    viewModel.addScheme(
+                                        TtsSchemeItem(
+                                            name = editedName.trim().ifBlank { "未命名" },
+                                            address = editedAddress.trim(),
+                                            apiKey = editedKey.trim()
+                                        )
+                                    )
+                                }
                                 showInput = false
+                                editingSchemeId = null
                             }
                         },
                         enabled = editedAddress.isNotBlank(),
@@ -475,45 +504,43 @@ private fun TtsApiConfigCard(
                     ) {
                         Text("确认")
                     }
-                    if (ttsSettings.apiAddress.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        TextButton(
-                            onClick = {
-                                editedAddress = ttsSettings.apiAddress
-                                editedKey = ttsSettings.apiKey
-                                showInput = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("取消")
-                        }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    TextButton(
+                        onClick = {
+                            showInput = false
+                            editingSchemeId = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("取消")
                     }
                 }
             }
         }
 
-        // ---- Config fields (only when address is set) ----
-        if (ttsSettings.apiAddress.isNotBlank()) {
+        // ---- Active Scheme Config ----
+        val active = ttsSettings.activeScheme
+        if (active != null) {
             Spacer(modifier = Modifier.height(8.dp))
             TtsTextField(
                 label = "语速 (speakSpeed)",
-                value = ttsSettings.speed,
+                value = active.speed,
                 placeholder = "1.0",
                 keyboardType = KeyboardType.Decimal,
-                onValueChange = { viewModel.updateTtsSpeed(it) }
+                onValueChange = { viewModel.updateActiveSchemeSpeed(it) }
             )
             TtsTextField(
                 label = "延迟 (delay)",
-                value = ttsSettings.delay,
+                value = active.delay,
                 placeholder = "5",
                 keyboardType = KeyboardType.Number,
-                onValueChange = { viewModel.updateTtsDelay(it) }
+                onValueChange = { viewModel.updateActiveSchemeDelay(it) }
             )
             TtsTextField(
                 label = "音色 (voice)",
-                value = ttsSettings.voice,
+                value = active.voice,
                 placeholder = "zh_female_wenroutaozi_uranus_bigtts",
-                onValueChange = { viewModel.updateTtsVoice(it) }
+                onValueChange = { viewModel.updateActiveSchemeVoice(it) }
             )
             Text(
                 "兼容阅读(legado)的TTS接口格式",
@@ -530,7 +557,6 @@ private fun TtsApiConfigCard(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
-
             var prefetchText by remember(ttsSettings.prefetchCount) {
                 mutableStateOf(ttsSettings.prefetchCount.toString())
             }
@@ -557,9 +583,55 @@ private fun TtsApiConfigCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp)
             )
-
             Spacer(modifier = Modifier.height(8.dp))
             CacheStatsCard(viewModel)
+        }
+    }
+}
+
+@Composable
+private fun SchemeRow(
+    scheme: TtsSchemeItem,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = isSelected,
+            onClick = onSelect
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(scheme.name, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                scheme.address,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.Create, contentDescription = "编辑", modifier = Modifier.size(18.dp))
+        }
+        Box {
+            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(18.dp))
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                    onClick = { onDelete(); menuExpanded = false }
+                )
+            }
         }
     }
 }

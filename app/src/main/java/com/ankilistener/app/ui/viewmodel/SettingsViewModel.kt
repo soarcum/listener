@@ -8,6 +8,7 @@ import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
 import com.ankilistener.app.data.ThemeMode
 import com.ankilistener.app.data.TtsScheme
+import com.ankilistener.app.data.TtsSchemeItem
 import com.ankilistener.app.util.TtsAudioCache
 import com.ankilistener.app.util.TtsManager
 import com.ankilistener.app.util.TtsProvider
@@ -15,14 +16,13 @@ import com.ankilistener.app.util.TtsProvider
 data class TtsSettings(
     val provider: TtsProvider = TtsProvider.SYSTEM,
     val scheme: TtsScheme = TtsScheme.SYSTEM,
-    val apiAddress: String = "",
-    val apiKey: String = "",
-    val baseUrl: String = SettingsRepository.DEFAULT_BASE_URL,
-    val speed: String = "1.0",
-    val delay: String = "5",
-    val voice: String = "zh_female_wenroutaozi_uranus_bigtts",
+    val schemes: List<TtsSchemeItem> = emptyList(),
+    val activeSchemeId: String = "",
     val prefetchCount: Int = 3
-)
+) {
+    val activeScheme: TtsSchemeItem?
+        get() = schemes.find { it.id == activeSchemeId } ?: schemes.firstOrNull()
+}
 
 data class AiAnswerSettings(
     val enabled: Boolean = false,
@@ -67,17 +67,17 @@ class SettingsViewModel(
 
     private fun loadSettings() {
         _gestureMappings.value = settingsRepository.getAllMappings()
+        val schemes = settingsRepository.getTtsSchemes()
+        val activeId = settingsRepository.getActiveSchemeId()
         _ttsSettings.value = TtsSettings(
             provider = settingsRepository.getTtsProvider(),
             scheme = settingsRepository.getTtsScheme(),
-            apiAddress = settingsRepository.getTtsApiAddress(),
-            apiKey = settingsRepository.getTtsApiKey(),
-            baseUrl = settingsRepository.getTtsBaseUrl(),
-            speed = settingsRepository.getTtsSpeed(),
-            delay = settingsRepository.getTtsDelay(),
-            voice = settingsRepository.getTtsVoice(),
+            schemes = schemes,
+            activeSchemeId = activeId.ifBlank { schemes.firstOrNull()?.id ?: "" },
             prefetchCount = settingsRepository.getPrefetchCount()
         )
+        // Sync active scheme config to TtsManager on load
+        if (schemes.isNotEmpty()) applyTtsConfig()
         _aiSettings.value = AiAnswerSettings(
             enabled = settingsRepository.getAiEnabled(),
             endpoint = settingsRepository.getAiEndpoint(),
@@ -113,72 +113,86 @@ class SettingsViewModel(
     private fun applyTtsConfig() {
         val s = _ttsSettings.value
         ttsManager.provider = s.provider
-        ttsManager.updateApiConfig(
-            baseUrl = s.baseUrl,
-            speed = s.speed,
-            delay = s.delay,
-            voice = s.voice,
-            apiKey = s.apiKey
-        )
-    }
-
-    fun updateTtsProvider(provider: TtsProvider) {
-        settingsRepository.setTtsProvider(provider)
-        _ttsSettings.value = _ttsSettings.value.copy(provider = provider)
-        applyTtsConfig()
+        val active = s.activeScheme
+        if (active != null) {
+            ttsManager.updateApiConfig(
+                baseUrl = active.address,
+                speed = active.speed,
+                delay = active.delay,
+                voice = active.voice,
+                apiKey = active.apiKey
+            )
+        }
     }
 
     fun updateTtsScheme(scheme: TtsScheme) {
         settingsRepository.setTtsScheme(scheme)
-        val hasAddress = _ttsSettings.value.apiAddress.isNotBlank()
-        val provider = if (scheme == TtsScheme.API && hasAddress) TtsProvider.API else TtsProvider.SYSTEM
+        val hasSchemes = _ttsSettings.value.schemes.isNotEmpty()
+        val provider = if (scheme == TtsScheme.API && hasSchemes) TtsProvider.API else TtsProvider.SYSTEM
         settingsRepository.setTtsProvider(provider)
         _ttsSettings.value = _ttsSettings.value.copy(scheme = scheme, provider = provider)
         applyTtsConfig()
     }
 
-    fun updateTtsApiAddress(address: String, apiKey: String) {
-        settingsRepository.setTtsApiAddress(address)
-        settingsRepository.setTtsApiKey(apiKey)
-        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = address, apiKey = apiKey)
-        if (address.isNotBlank()) {
-            updateTtsBaseUrl(address)
-            settingsRepository.setTtsProvider(TtsProvider.API)
-            _ttsSettings.value = _ttsSettings.value.copy(provider = TtsProvider.API)
-            applyTtsConfig()
+    fun addScheme(item: TtsSchemeItem) {
+        val updated = _ttsSettings.value.schemes + item
+        settingsRepository.setTtsSchemes(updated)
+        settingsRepository.setActiveSchemeId(item.id)
+        settingsRepository.setTtsProvider(TtsProvider.API)
+        _ttsSettings.value = _ttsSettings.value.copy(
+            schemes = updated,
+            activeSchemeId = item.id,
+            provider = TtsProvider.API
+        )
+        applyTtsConfig()
+    }
+
+    fun updateScheme(item: TtsSchemeItem) {
+        val updated = _ttsSettings.value.schemes.map { if (it.id == item.id) item else it }
+        settingsRepository.setTtsSchemes(updated)
+        _ttsSettings.value = _ttsSettings.value.copy(schemes = updated)
+        applyTtsConfig()
+    }
+
+    fun removeScheme(id: String) {
+        val updated = _ttsSettings.value.schemes.filter { it.id != id }
+        settingsRepository.setTtsSchemes(updated)
+        val newActiveId = if (_ttsSettings.value.activeSchemeId == id) {
+            updated.firstOrNull()?.id ?: ""
+        } else {
+            _ttsSettings.value.activeSchemeId
         }
-    }
-
-    fun clearTtsApiConfig() {
-        settingsRepository.setTtsApiAddress("")
-        settingsRepository.setTtsApiKey("")
-        settingsRepository.setTtsProvider(TtsProvider.SYSTEM)
-        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = "", apiKey = "", provider = TtsProvider.SYSTEM)
+        settingsRepository.setActiveSchemeId(newActiveId)
+        if (updated.isEmpty()) {
+            settingsRepository.setTtsProvider(TtsProvider.SYSTEM)
+        }
+        _ttsSettings.value = _ttsSettings.value.copy(
+            schemes = updated,
+            activeSchemeId = newActiveId,
+            provider = if (updated.isEmpty()) TtsProvider.SYSTEM else _ttsSettings.value.provider
+        )
         applyTtsConfig()
     }
 
-    fun updateTtsBaseUrl(url: String) {
-        settingsRepository.setTtsBaseUrl(url)
-        _ttsSettings.value = _ttsSettings.value.copy(baseUrl = url)
+    fun selectScheme(id: String) {
+        settingsRepository.setActiveSchemeId(id)
+        _ttsSettings.value = _ttsSettings.value.copy(activeSchemeId = id)
         applyTtsConfig()
     }
 
-    fun updateTtsSpeed(speed: String) {
-        settingsRepository.setTtsSpeed(speed)
-        _ttsSettings.value = _ttsSettings.value.copy(speed = speed)
-        applyTtsConfig()
+    fun updateActiveSchemeSpeed(speed: String) {
+        val active = _ttsSettings.value.activeScheme ?: return
+        updateScheme(active.copy(speed = speed))
     }
 
-    fun updateTtsDelay(delay: String) {
-        settingsRepository.setTtsDelay(delay)
-        _ttsSettings.value = _ttsSettings.value.copy(delay = delay)
-        applyTtsConfig()
+    fun updateActiveSchemeDelay(delay: String) {
+        val active = _ttsSettings.value.activeScheme ?: return
+        updateScheme(active.copy(delay = delay))
     }
 
-    fun updateTtsVoice(voice: String) {
-        settingsRepository.setTtsVoice(voice)
-        _ttsSettings.value = _ttsSettings.value.copy(voice = voice)
-        applyTtsConfig()
+    fun updateActiveSchemeVoice(voice: String) {
+        val active = _ttsSettings.value.activeScheme ?: return
+        updateScheme(active.copy(voice = voice))
     }
 
     fun updatePrefetchCount(count: Int) {
