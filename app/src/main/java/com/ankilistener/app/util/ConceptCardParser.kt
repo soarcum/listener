@@ -60,12 +60,15 @@ object ConceptCardParser {
 
         return try {
             val root = JSONObject(jsonStr)
-            if (!root.has("追问")) {
-                AppLogger.d(TAG, "parseFollowUps: no '追问' key in JSON")
-                return emptyList()
+            val arr = when {
+                root.has("追问") -> root.getJSONArray("追问")
+                root.has("QA") -> root.getJSONArray("QA")
+                else -> {
+                    AppLogger.d(TAG, "parseFollowUps: no '追问' or 'QA' key in JSON")
+                    return emptyList()
+                }
             }
-            val arr = root.getJSONArray("追问")
-            AppLogger.d(TAG, "parseFollowUps: 追问 array length=${arr.length()}")
+            AppLogger.d(TAG, "parseFollowUps: array length=${arr.length()}")
             parseFollowUpItems(arr, noteId, ord)
         } catch (e: Exception) {
             AppLogger.e(TAG, "Failed to parse follow-ups JSON", e)
@@ -79,7 +82,7 @@ object ConceptCardParser {
         for (i in 0 until arr.length()) {
             try {
                 val obj = arr.getJSONObject(i)
-                val id = obj.getString("id")
+                val id = obj.opt("id")?.toString() ?: continue
                 if (id in seenIds) {
                     AppLogger.w(TAG, "Duplicate follow-up id '$id', skipping")
                     continue
@@ -140,8 +143,8 @@ object ConceptCardParser {
         if (start < 0 || end <= start) return null
         val json = raw.substring(start, end + 1)
         val hasItems = json.contains("\"items\"")
-        val hasFollowUps = json.contains("\"追问\"")
-        AppLogger.d(TAG, "extractConceptJson: substring length=${json.length}, contains items=$hasItems, contains 追问=$hasFollowUps")
+        val hasFollowUps = json.contains("\"追问\"") || json.contains("\"QA\"")
+        AppLogger.d(TAG, "extractConceptJson: substring length=${json.length}, contains items=$hasItems, contains follow-ups=$hasFollowUps")
         return if (hasItems || hasFollowUps) json else null
     }
 
@@ -152,7 +155,7 @@ object ConceptCardParser {
             try {
                 val obj = items.getJSONObject(i)
                 AppLogger.d(TAG, "parseItems[$i]: keys=${obj.keys().asSequence().toList()}")
-                val id = obj.getString("id")
+                val id = obj.opt("id")?.toString() ?: continue
                 if (id in seenIds) {
                     AppLogger.w(TAG, "Duplicate concept id '$id', skipping")
                     continue

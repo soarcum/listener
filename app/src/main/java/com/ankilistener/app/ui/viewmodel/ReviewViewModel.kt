@@ -396,13 +396,6 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun prepareFollowUpQueue() {
         val card = currentCard ?: return
-        val conceptEnabled = settingsRepository.getConceptReviewEnabled()
-        if (!conceptEnabled) {
-            _allFollowUpsForCurrentCard.value = emptyList()
-            _dueFollowUpQueue.value = emptyList()
-            _followUpReviewResults.value = emptyMap()
-            return
-        }
         val followUps = ConceptCardParser.parseFollowUps(card.back, card.id, card.ord)
         AppLogger.i(TAG, "prepareFollowUpQueue: parsed ${followUps.size} follow-ups")
         _allFollowUpsForCurrentCard.value = followUps
@@ -633,9 +626,9 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 ttsManager.prefetch(backText)
 
                 // Prefetch concept TTS for upcoming cards
+                val now = System.currentTimeMillis()
                 if (settingsRepository.getConceptReviewEnabled()) {
                     val concepts = ConceptCardParser.parse(card.back, card.id, card.ord)
-                    val now = System.currentTimeMillis()
                     for (concept in concepts) {
                         val key = conceptScheduleRepository.buildKey(card.id, card.ord, concept.id)
                         if (conceptScheduleRepository.isDue(key, now)) {
@@ -643,14 +636,14 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                             ttsManager.prefetch(concept.answer)
                         }
                     }
-                    // Prefetch follow-up TTS
-                    val followUps = ConceptCardParser.parseFollowUps(card.back, card.id, card.ord)
-                    for (fu in followUps) {
-                        val key = conceptScheduleRepository.buildFollowUpKey(card.id, card.ord, fu.id)
-                        if (conceptScheduleRepository.isDue(key, now)) {
-                            ttsManager.prefetch(fu.question)
-                            ttsManager.prefetch(fu.answer)
-                        }
+                }
+                // Prefetch follow-up TTS (independent of concept setting)
+                val followUps = ConceptCardParser.parseFollowUps(card.back, card.id, card.ord)
+                for (fu in followUps) {
+                    val key = conceptScheduleRepository.buildFollowUpKey(card.id, card.ord, fu.id)
+                    if (conceptScheduleRepository.isDue(key, now)) {
+                        ttsManager.prefetch(fu.question)
+                        ttsManager.prefetch(fu.answer)
                     }
                 }
             }
