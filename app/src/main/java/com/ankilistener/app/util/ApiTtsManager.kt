@@ -31,6 +31,7 @@ class ApiTtsManager(context: Context) {
     var speakSpeed: String = "1.0"
     var delay: String = "5"
     var voice: String = "zh_female_wenroutaozi_uranus_bigtts"
+    var apiKey: String = ""
 
     /**
      * Speaks the given text. Uses cached audio if available, otherwise

@@ -16,6 +16,7 @@ data class TtsSettings(
     val provider: TtsProvider = TtsProvider.SYSTEM,
     val scheme: TtsScheme = TtsScheme.SYSTEM,
     val apiAddress: String = "",
+    val apiKey: String = "",
     val baseUrl: String = SettingsRepository.DEFAULT_BASE_URL,
     val speed: String = "1.0",
     val delay: String = "5",
@@ -70,6 +71,7 @@ class SettingsViewModel(
             provider = settingsRepository.getTtsProvider(),
             scheme = settingsRepository.getTtsScheme(),
             apiAddress = settingsRepository.getTtsApiAddress(),
+            apiKey = settingsRepository.getTtsApiKey(),
             baseUrl = settingsRepository.getTtsBaseUrl(),
             speed = settingsRepository.getTtsSpeed(),
             delay = settingsRepository.getTtsDelay(),
@@ -115,7 +117,8 @@ class SettingsViewModel(
             baseUrl = s.baseUrl,
             speed = s.speed,
             delay = s.delay,
-            voice = s.voice
+            voice = s.voice,
+            apiKey = s.apiKey
         )
     }
 
@@ -134,9 +137,10 @@ class SettingsViewModel(
         applyTtsConfig()
     }
 
-    fun updateTtsApiAddress(address: String) {
+    fun updateTtsApiAddress(address: String, apiKey: String) {
         settingsRepository.setTtsApiAddress(address)
-        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = address)
+        settingsRepository.setTtsApiKey(apiKey)
+        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = address, apiKey = apiKey)
         if (address.isNotBlank()) {
             updateTtsBaseUrl(address)
             settingsRepository.setTtsProvider(TtsProvider.API)
@@ -145,10 +149,11 @@ class SettingsViewModel(
         }
     }
 
-    fun clearTtsApiAddress() {
+    fun clearTtsApiConfig() {
         settingsRepository.setTtsApiAddress("")
+        settingsRepository.setTtsApiKey("")
         settingsRepository.setTtsProvider(TtsProvider.SYSTEM)
-        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = "", provider = TtsProvider.SYSTEM)
+        _ttsSettings.value = _ttsSettings.value.copy(apiAddress = "", apiKey = "", provider = TtsProvider.SYSTEM)
         applyTtsConfig()
     }
 

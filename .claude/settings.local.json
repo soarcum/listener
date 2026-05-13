@@ -11,7 +11,11 @@
       "WebFetch",
       "Agent",
       "NotebookEdit",
-      "Skill"
+      "Skill",
+      "Read(//c/Users/Administrator/AppData/Roaming/360DrvMgrScrSaver/**)",
+      "PowerShell(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match '360|驱动|qudong|DrvMgr' } | Select-Object TaskName, TaskPath, State, Date | Format-Table -AutoSize)",
+      "PowerShell(Get-CimInstance Win32_Product -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '360|驱动|qudong' } | Select-Object Name, Version, InstallDate, InstallSource, Vendor | Format-Table -AutoSize)",
+      "Read(//c/Program Files \\(x86\\)/360/360DrvMgr/**)"
     ],
     "deny": [],
     "additionalDirectories": [

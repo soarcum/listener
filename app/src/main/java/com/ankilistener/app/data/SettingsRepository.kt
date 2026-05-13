@@ -117,6 +117,14 @@ class SettingsRepository(context: Context) {
         ttsPrefs.edit().putString("tts_api_address", address).apply()
     }
 
+    fun getTtsApiKey(): String {
+        return ttsPrefs.getString("tts_api_key", "") ?: ""
+    }
+
+    fun setTtsApiKey(key: String) {
+        ttsPrefs.edit().putString("tts_api_key", key).apply()
+    }
+
     fun getTtsBaseUrl(): String {
         return ttsPrefs.getString("tts_base_url", DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
     }

@@ -57,11 +57,12 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     /**
      * Update API TTS configuration.
      */
-    fun updateApiConfig(baseUrl: String, speed: String, delay: String, voice: String) {
+    fun updateApiConfig(baseUrl: String, speed: String, delay: String, voice: String, apiKey: String = "") {
         apiTtsManager.baseUrl = baseUrl
         apiTtsManager.speakSpeed = speed
         apiTtsManager.delay = delay
         apiTtsManager.voice = voice
+        apiTtsManager.apiKey = apiKey
     }
 
     fun speak(text: String, onComplete: (() -> Unit)? = null) {

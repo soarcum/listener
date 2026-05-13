@@ -127,10 +127,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 }
             }
 
-            // API Scheme: Address Card + Config (only when API is selected)
+            // API Scheme: Address + Key Card + Config (only when API is selected)
             if (ttsSettings.scheme == TtsScheme.API) {
                 item {
-                    TtsApiSchemeCard(viewModel, ttsSettings)
+                    TtsApiConfigCard(viewModel, ttsSettings)
                 }
             }
 
@@ -362,24 +362,29 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun TtsApiSchemeCard(
+private fun TtsApiConfigCard(
     viewModel: SettingsViewModel,
     ttsSettings: com.ankilistener.app.ui.viewmodel.TtsSettings
 ) {
-    var showAddressInput by remember { mutableStateOf(ttsSettings.apiAddress.isBlank()) }
+    var showInput by remember { mutableStateOf(ttsSettings.apiAddress.isBlank()) }
     var editedAddress by remember { mutableStateOf(ttsSettings.apiAddress) }
+    var editedKey by remember { mutableStateOf(ttsSettings.apiKey) }
 
-    LaunchedEffect(ttsSettings.apiAddress) {
+    LaunchedEffect(ttsSettings.apiAddress, ttsSettings.apiKey) {
         if (ttsSettings.apiAddress.isBlank()) {
-            showAddressInput = true
+            showInput = true
             editedAddress = ""
+            editedKey = ""
+        } else {
+            editedAddress = ttsSettings.apiAddress
+            editedKey = ttsSettings.apiKey
         }
     }
 
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Address Card
+        // ---- Address + Key Card ----
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -387,8 +392,8 @@ private fun TtsApiSchemeCard(
             )
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // Display current address + key
                 if (ttsSettings.apiAddress.isNotBlank()) {
-                    // Address display with actions
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -396,15 +401,23 @@ private fun TtsApiSchemeCard(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("当前地址", style = MaterialTheme.typography.titleSmall)
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 ttsSettings.apiAddress,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
+                            if (ttsSettings.apiKey.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    "Key: ${ttsSettings.apiKey}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         Row {
-                            IconButton(onClick = { showAddressInput = true }, modifier = Modifier.size(32.dp)) {
+                            IconButton(onClick = { showInput = true }, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     Icons.Default.Create,
                                     contentDescription = "编辑",
@@ -412,8 +425,7 @@ private fun TtsApiSchemeCard(
                                 )
                             }
                             IconButton(onClick = {
-                                viewModel.clearTtsApiAddress()
-                                showAddressInput = true
+                                viewModel.clearTtsApiConfig()
                             }, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     Icons.Default.Delete,
@@ -426,44 +438,61 @@ private fun TtsApiSchemeCard(
                     }
                 }
 
-                if (showAddressInput) {
+                // Input fields (shown when no address, or editing)
+                if (showInput) {
                     if (ttsSettings.apiAddress.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = editedAddress,
-                            onValueChange = { editedAddress = it },
-                            label = { Text("输入地址") },
-                            placeholder = { Text("http://172.22.64.1:3000") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(onClick = {
+                    OutlinedTextField(
+                        value = editedAddress,
+                        onValueChange = { editedAddress = it },
+                        label = { Text("服务器地址") },
+                        placeholder = { Text("http://172.22.64.1:3000") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editedKey,
+                        onValueChange = { editedKey = it },
+                        label = { Text("API Key") },
+                        placeholder = { Text("可留空") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
                             if (editedAddress.isNotBlank()) {
-                                viewModel.updateTtsApiAddress(editedAddress.trim())
-                                showAddressInput = false
+                                viewModel.updateTtsApiAddress(editedAddress.trim(), editedKey.trim())
+                                showInput = false
                             }
-                        }) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = "确认",
-                                tint = if (editedAddress.isNotBlank())
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        },
+                        enabled = editedAddress.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("确认")
+                    }
+                    if (ttsSettings.apiAddress.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TextButton(
+                            onClick = {
+                                editedAddress = ttsSettings.apiAddress
+                                editedKey = ttsSettings.apiKey
+                                showInput = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("取消")
                         }
                     }
                 }
             }
         }
 
-        // Config fields (only when address is set)
+        // ---- Config fields (only when address is set) ----
         if (ttsSettings.apiAddress.isNotBlank()) {
             Spacer(modifier = Modifier.height(8.dp))
             TtsTextField(
