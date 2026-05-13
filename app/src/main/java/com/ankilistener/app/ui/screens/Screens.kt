@@ -269,6 +269,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             if (concept.title.isNotBlank()) {
                                 Text(
                                     text = concept.title,
+                                    modifier = Modifier.fillMaxWidth(),
                                     fontSize = (18 * fontScale).sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
@@ -277,6 +278,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             }
                             Text(
                                 text = parseConceptLinks(concept.question, defaultColor, conceptColorMap),
+                                modifier = Modifier.fillMaxWidth(),
                                 fontSize = (20 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 lineHeight = (28 * fontScale).sp
@@ -285,6 +287,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             // CONCEPT_BACK
                             Text(
                                 text = parseConceptLinks(concept.question, defaultColor, conceptColorMap),
+                                modifier = Modifier.fillMaxWidth(),
                                 fontSize = (15 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -299,6 +302,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = parseConceptLinks(concept.answer, defaultColor, conceptColorMap),
+                                modifier = Modifier.fillMaxWidth(),
                                 fontSize = (20 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 lineHeight = (28 * fontScale).sp
@@ -346,6 +350,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         if (state == ReviewState.FOLLOWUP_FRONT) {
                             Text(
                                 text = parseConceptLinks(followUp.question, defaultColor, conceptColorMap),
+                                modifier = Modifier.fillMaxWidth(),
                                 fontSize = (20 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 lineHeight = (28 * fontScale).sp
@@ -354,6 +359,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             // FOLLOWUP_BACK
                             Text(
                                 text = parseConceptLinks(followUp.question, defaultColor, conceptColorMap),
+                                modifier = Modifier.fillMaxWidth(),
                                 fontSize = (15 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -368,6 +374,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = parseConceptLinks(followUp.answer, defaultColor, conceptColorMap),
+                                modifier = Modifier.fillMaxWidth(),
                                 fontSize = (20 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 lineHeight = (28 * fontScale).sp
