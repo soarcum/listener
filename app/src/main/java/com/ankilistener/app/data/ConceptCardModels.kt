@@ -8,3 +8,11 @@ data class ConceptCard(
     val sourceNoteId: Long,
     val sourceOrd: Int
 )
+
+data class FollowUpCard(
+    val id: String,
+    val question: String,
+    val answer: String,
+    val sourceNoteId: Long,
+    val sourceOrd: Int
+)

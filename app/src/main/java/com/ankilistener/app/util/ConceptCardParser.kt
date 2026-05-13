@@ -1,6 +1,7 @@
 package com.ankilistener.app.util
 
 import com.ankilistener.app.data.ConceptCard
+import com.ankilistener.app.data.FollowUpCard
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -48,6 +49,68 @@ object ConceptCardParser {
         }
     }
 
+    fun parseFollowUps(html: String, noteId: Long, ord: Int): List<FollowUpCard> {
+        AppLogger.d(TAG, "parseFollowUps() called: noteId=$noteId, ord=$ord")
+
+        val jsonStr = findConceptJson(html)
+        if (jsonStr == null) {
+            AppLogger.d(TAG, "parseFollowUps: no concept block found")
+            return emptyList()
+        }
+
+        return try {
+            val root = JSONObject(jsonStr)
+            if (!root.has("追问")) {
+                AppLogger.d(TAG, "parseFollowUps: no '追问' key in JSON")
+                return emptyList()
+            }
+            val arr = root.getJSONArray("追问")
+            AppLogger.d(TAG, "parseFollowUps: 追问 array length=${arr.length()}")
+            parseFollowUpItems(arr, noteId, ord)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to parse follow-ups JSON", e)
+            emptyList()
+        }
+    }
+
+    private fun parseFollowUpItems(arr: JSONArray, noteId: Long, ord: Int): List<FollowUpCard> {
+        val result = mutableListOf<FollowUpCard>()
+        val seenIds = mutableSetOf<String>()
+        for (i in 0 until arr.length()) {
+            try {
+                val obj = arr.getJSONObject(i)
+                val id = obj.getString("id")
+                if (id in seenIds) {
+                    AppLogger.w(TAG, "Duplicate follow-up id '$id', skipping")
+                    continue
+                }
+                seenIds.add(id)
+                val (question, answer) = extractQuestionAnswer(obj)
+                if (answer.isBlank()) {
+                    AppLogger.w(TAG, "Follow-up '$id' has empty answer, skipping")
+                    continue
+                }
+                if (question.isBlank()) {
+                    AppLogger.w(TAG, "Follow-up '$id' has empty question, skipping")
+                    continue
+                }
+                result.add(
+                    FollowUpCard(
+                        id = id,
+                        question = question,
+                        answer = answer,
+                        sourceNoteId = noteId,
+                        sourceOrd = ord
+                    )
+                )
+                AppLogger.i(TAG, "parseFollowUpItems[$i]: added follow-up id=$id")
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Failed to parse follow-up item at index $i", e)
+            }
+        }
+        return result
+    }
+
     private fun findConceptJson(html: String): String? {
         val regex = COMMENT_REGEX
         if (regex == null) {
@@ -77,8 +140,9 @@ object ConceptCardParser {
         if (start < 0 || end <= start) return null
         val json = raw.substring(start, end + 1)
         val hasItems = json.contains("\"items\"")
-        AppLogger.d(TAG, "extractConceptJson: substring length=${json.length}, contains items=$hasItems")
-        return if (hasItems) json else null
+        val hasFollowUps = json.contains("\"追问\"")
+        AppLogger.d(TAG, "extractConceptJson: substring length=${json.length}, contains items=$hasItems, contains 追问=$hasFollowUps")
+        return if (hasItems || hasFollowUps) json else null
     }
 
     private fun parseItems(items: JSONArray, noteId: Long, ord: Int): List<ConceptCard> {

@@ -38,6 +38,10 @@ class ConceptScheduleRepository(context: Context) {
         return "$noteId:$ord:$conceptId"
     }
 
+    fun buildFollowUpKey(noteId: Long, ord: Int, followUpId: String): String {
+        return "$noteId:$ord:fu:$followUpId"
+    }
+
     fun getState(key: String): ConceptReviewState? {
         val json = prefs.getString(key, null) ?: return null
         return try {

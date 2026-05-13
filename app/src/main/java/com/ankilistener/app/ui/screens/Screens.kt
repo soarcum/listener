@@ -123,6 +123,9 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
     val dueConcepts by viewModel.dueConceptQueue
     val currentConceptIdx by viewModel.currentConceptIndex
     val concept = viewModel.currentConcept
+    val dueFollowUps by viewModel.dueFollowUpQueue
+    val currentFollowUpIdx by viewModel.currentFollowUpIndex
+    val followUp = viewModel.currentFollowUp
     val context = LocalContext.current
     val recordPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -197,7 +200,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         textAlign = TextAlign.Center,
                         lineHeight = (32 * fontScale).sp
                     )
-                } else if (state == ReviewState.BACK || state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) {
+                } else if (state == ReviewState.BACK || state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK || state == ReviewState.FOLLOWUP_FRONT || state == ReviewState.FOLLOWUP_BACK) {
                     // Show question (smaller)
                     Text(
                         text = parseHtml(it.front).toAnnotatedString(),
@@ -296,6 +299,75 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = parseConceptLinks(concept.answer, defaultColor, conceptColorMap),
+                                fontSize = (20 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = (28 * fontScale).sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Follow-up overlay dialog
+        if ((state == ReviewState.FOLLOWUP_FRONT || state == ReviewState.FOLLOWUP_BACK) && followUp != null) {
+            val conceptColorMap = viewModel.getConceptColorMap()
+            val defaultColor = MaterialTheme.colorScheme.primary
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .padding(vertical = 32.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Progress badge
+                        Text(
+                            text = "追问 ${currentFollowUpIdx + 1}/${dueFollowUps.size}",
+                            fontSize = (13 * fontScale).sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (state == ReviewState.FOLLOWUP_FRONT) {
+                            Text(
+                                text = parseConceptLinks(followUp.question, defaultColor, conceptColorMap),
+                                fontSize = (20 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = (28 * fontScale).sp
+                            )
+                        } else {
+                            // FOLLOWUP_BACK
+                            Text(
+                                text = parseConceptLinks(followUp.question, defaultColor, conceptColorMap),
+                                fontSize = (15 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = (21 * fontScale).sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Divider(
+                                modifier = Modifier.fillMaxWidth(0.5f),
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = parseConceptLinks(followUp.answer, defaultColor, conceptColorMap),
                                 fontSize = (20 * fontScale).sp,
                                 textAlign = TextAlign.Center,
                                 lineHeight = (28 * fontScale).sp

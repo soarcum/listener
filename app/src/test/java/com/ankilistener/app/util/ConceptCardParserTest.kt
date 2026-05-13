@@ -179,4 +179,115 @@ class ConceptCardParserTest {
         assertTrue(cleaned.contains("TODO: keep me"))
         assertFalse(cleaned.contains("\"items\""))
     }
+
+    @Test
+    fun `parse follow-ups from JSON with both items and follow-ups`() {
+        val html = """
+            <!--
+            {
+              "items": [
+                { "id": "0", "title": "T", "Q?": "A." }
+              ],
+              "追问": [
+                { "id": "0", "追问问题1": "追问答案1" },
+                { "id": "1", "追问问题2": "追问答案2" }
+              ]
+            }
+            -->
+        """.trimIndent()
+
+        val concepts = ConceptCardParser.parse(html, 1L, 0)
+        assertEquals(1, concepts.size)
+
+        val followUps = ConceptCardParser.parseFollowUps(html, 1L, 0)
+        assertEquals(2, followUps.size)
+        assertEquals("追问问题1", followUps[0].question)
+        assertEquals("追问答案1", followUps[0].answer)
+        assertEquals("追问问题2", followUps[1].question)
+        assertEquals("追问答案2", followUps[1].answer)
+    }
+
+    @Test
+    fun `parse follow-ups returns empty when no 追问 key`() {
+        val html = """
+            <!--
+            { "items": [ { "id": "0", "title": "T", "Q?": "A." } ] }
+            -->
+        """.trimIndent()
+
+        val followUps = ConceptCardParser.parseFollowUps(html, 1L, 0)
+        assertTrue(followUps.isEmpty())
+    }
+
+    @Test
+    fun `parse follow-ups skips empty answer`() {
+        val html = """
+            <!--
+            {
+              "items": [ { "id": "0", "title": "T", "Q?": "A." } ],
+              "追问": [
+                { "id": "0", "Q1": "" },
+                { "id": "1", "Q2": "A2" }
+              ]
+            }
+            -->
+        """.trimIndent()
+
+        val followUps = ConceptCardParser.parseFollowUps(html, 1L, 0)
+        assertEquals(1, followUps.size)
+        assertEquals("Q2", followUps[0].question)
+    }
+
+    @Test
+    fun `parse follow-ups with q-a legacy format`() {
+        val html = """
+            <!--
+            {
+              "items": [ { "id": "0", "title": "T", "Q?": "A." } ],
+              "追问": [
+                { "id": "0", "q": "追问Q", "a": "追问A" }
+              ]
+            }
+            -->
+        """.trimIndent()
+
+        val followUps = ConceptCardParser.parseFollowUps(html, 1L, 0)
+        assertEquals(1, followUps.size)
+        assertEquals("追问Q", followUps[0].question)
+        assertEquals("追问A", followUps[0].answer)
+    }
+
+    @Test
+    fun `stripBlocks removes block with follow-ups`() {
+        val html = """
+            <p>Answer</p>
+            <!--
+            {
+              "items": [ { "id": "0", "title": "T", "Q?": "A." } ],
+              "追问": [ { "id": "0", "Q": "A" } ]
+            }
+            -->
+        """.trimIndent()
+
+        val cleaned = ConceptCardParser.stripBlocks(html)
+        assertFalse(cleaned.contains("\"追问\""))
+        assertFalse(cleaned.contains("\"items\""))
+    }
+
+    @Test
+    fun `parse follow-ups skips empty question`() {
+        val html = """
+            <!--
+            {
+              "items": [ { "id": "0", "title": "T", "Q?": "A." } ],
+              "追问": [
+                { "id": "0", "": "答案" }
+              ]
+            }
+            -->
+        """.trimIndent()
+
+        val followUps = ConceptCardParser.parseFollowUps(html, 1L, 0)
+        assertTrue(followUps.isEmpty())
+    }
 }

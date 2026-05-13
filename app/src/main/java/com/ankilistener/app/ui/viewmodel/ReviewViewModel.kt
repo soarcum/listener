@@ -14,6 +14,7 @@ import com.ankilistener.app.data.Card
 import com.ankilistener.app.data.ConceptCard
 import com.ankilistener.app.data.ConceptReviewState
 import com.ankilistener.app.data.ConceptScheduleRepository
+import com.ankilistener.app.data.FollowUpCard
 import com.ankilistener.app.data.Deck
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
@@ -30,7 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class ReviewState {
-    FRONT, BACK, CONCEPT_FRONT, CONCEPT_BACK, FINISHED, LOADING
+    FRONT, BACK, CONCEPT_FRONT, CONCEPT_BACK, FOLLOWUP_FRONT, FOLLOWUP_BACK, FINISHED, LOADING
 }
 
 /**
@@ -161,6 +162,22 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private val _conceptReviewResults = mutableStateOf<Map<String, Int>>(emptyMap())
     val conceptReviewResults: State<Map<String, Int>> = _conceptReviewResults
 
+    // ---- Follow-up review state ----
+    private val _allFollowUpsForCurrentCard = mutableStateOf<List<FollowUpCard>>(emptyList())
+    val allFollowUpsForCurrentCard: State<List<FollowUpCard>> = _allFollowUpsForCurrentCard
+
+    private val _dueFollowUpQueue = mutableStateOf<List<FollowUpCard>>(emptyList())
+    val dueFollowUpQueue: State<List<FollowUpCard>> = _dueFollowUpQueue
+
+    private val _currentFollowUpIndex = mutableStateOf(0)
+    val currentFollowUpIndex: State<Int> = _currentFollowUpIndex
+
+    val currentFollowUp: FollowUpCard?
+        get() = _dueFollowUpQueue.value.getOrNull(_currentFollowUpIndex.value)
+
+    private val _followUpReviewResults = mutableStateOf<Map<String, Int>>(emptyMap())
+    val followUpReviewResults: State<Map<String, Int>> = _followUpReviewResults
+
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
     private var currentDeckId: Long? = null
     private var aiSessionId: String? = null
@@ -226,22 +243,28 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _reviewState.value = ReviewState.BACK
         _questionPlaybackFinished.value = false
         vibrateManager.vibrateShort()
-        // Prepare concept queue for this card
+        // Prepare concept and follow-up queues for this card
         prepareConceptQueue()
+        prepareFollowUpQueue()
         currentCard?.let {
             val hasConcepts = _dueConceptQueue.value.isNotEmpty()
-            AppLogger.i(TAG, "showBack: noteId=${it.id}, ord=${it.ord}, hasConcepts=$hasConcepts, dueCount=${_dueConceptQueue.value.size}, allCount=${_allConceptsForCurrentCard.value.size}")
-            AppLogger.d(TAG, "showBack: card.back length=${it.back.length}")
-            AppLogger.d(TAG, "showBack: card.back first 300: ${it.back.take(300)}")
+            val hasFollowUps = _dueFollowUpQueue.value.isNotEmpty()
+            AppLogger.i(TAG, "showBack: noteId=${it.id}, ord=${it.ord}, hasConcepts=$hasConcepts, hasFollowUps=$hasFollowUps")
             ttsManager.stop()
             val backTtsText = getBackTtsText(it)
-            AppLogger.d(TAG, "showBack: backTtsText length=${backTtsText.length}")
             ttsManager.speak(backTtsText) {
-                AppLogger.d(TAG, "showBack: TTS finished callback, hasConcepts=$hasConcepts, state=${_reviewState.value}")
-                // After back TTS finishes, auto-start concept flow if there are due concepts
-                if (hasConcepts && _reviewState.value == ReviewState.BACK) {
-                    AppLogger.i(TAG, "showBack: auto-starting concept flow")
-                    startConceptFlow()
+                AppLogger.d(TAG, "showBack: TTS finished callback, hasConcepts=$hasConcepts, hasFollowUps=$hasFollowUps, state=${_reviewState.value}")
+                if (_reviewState.value == ReviewState.BACK) {
+                    when {
+                        hasConcepts -> {
+                            AppLogger.i(TAG, "showBack: auto-starting concept flow")
+                            startConceptFlow()
+                        }
+                        hasFollowUps -> {
+                            AppLogger.i(TAG, "showBack: auto-starting follow-up flow")
+                            startFollowUpFlow()
+                        }
+                    }
                 }
             }
         }
@@ -356,10 +379,113 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     }
 
     private fun finishConceptFlow() {
-        AppLogger.i(TAG, "Concept flow finished, returning to main card BACK")
+        AppLogger.i(TAG, "Concept flow finished")
         _gestureFeedback.value = FeedbackEvent("相关概念复习完成")
+
+        val hasFollowUps = _dueFollowUpQueue.value.isNotEmpty()
+        if (hasFollowUps) {
+            startFollowUpFlow()
+        } else {
+            _reviewState.value = ReviewState.BACK
+            currentCard?.let {
+                ttsManager.stop()
+                ttsManager.speak(getBackTtsText(it))
+            }
+        }
+    }
+
+    private fun prepareFollowUpQueue() {
+        val card = currentCard ?: return
+        val conceptEnabled = settingsRepository.getConceptReviewEnabled()
+        if (!conceptEnabled) {
+            _allFollowUpsForCurrentCard.value = emptyList()
+            _dueFollowUpQueue.value = emptyList()
+            _followUpReviewResults.value = emptyMap()
+            return
+        }
+        val followUps = ConceptCardParser.parseFollowUps(card.back, card.id, card.ord)
+        AppLogger.i(TAG, "prepareFollowUpQueue: parsed ${followUps.size} follow-ups")
+        _allFollowUpsForCurrentCard.value = followUps
+        _followUpReviewResults.value = emptyMap()
+
+        val now = System.currentTimeMillis()
+        val dueOnly = settingsRepository.getConceptDueOnly()
+        val due = if (dueOnly) {
+            followUps.filter { fu ->
+                val key = conceptScheduleRepository.buildFollowUpKey(card.id, card.ord, fu.id)
+                conceptScheduleRepository.isDue(key, now)
+            }
+        } else {
+            followUps
+        }
+
+        _dueFollowUpQueue.value = due
+        _currentFollowUpIndex.value = 0
+        AppLogger.i(TAG, "prepareFollowUpQueue: ${due.size} due follow-ups out of ${followUps.size} total")
+    }
+
+    private fun startFollowUpFlow() {
+        val followUps = _dueFollowUpQueue.value
+        if (followUps.isEmpty()) return
+        _currentFollowUpIndex.value = 0
+        showFollowUpFront()
+        val msg = "开始复习 ${followUps.size} 个追问"
+        _gestureFeedback.value = FeedbackEvent(msg)
+        AppLogger.i(TAG, msg)
+    }
+
+    private fun showFollowUpFront() {
+        val followUp = currentFollowUp ?: return
+        _reviewState.value = ReviewState.FOLLOWUP_FRONT
+        _questionPlaybackFinished.value = false
+        AppLogger.d(TAG, "Follow-up front: ${followUp.id}")
+        ttsManager.stop()
+        ttsManager.speak(followUp.question) {
+            if (_reviewState.value == ReviewState.FOLLOWUP_FRONT && currentFollowUp?.id == followUp.id) {
+                _questionPlaybackFinished.value = true
+            }
+        }
+    }
+
+    private fun showFollowUpBack() {
+        val followUp = currentFollowUp ?: return
+        _reviewState.value = ReviewState.FOLLOWUP_BACK
+        _questionPlaybackFinished.value = false
+        AppLogger.d(TAG, "Follow-up back: ${followUp.id}")
+        ttsManager.stop()
+        ttsManager.speak(followUp.answer)
+    }
+
+    private fun answerFollowUp(ease: Int) {
+        val followUp = currentFollowUp ?: return
+        val card = currentCard ?: return
+        val key = conceptScheduleRepository.buildFollowUpKey(card.id, card.ord, followUp.id)
+        val now = System.currentTimeMillis()
+        val againDelay = settingsRepository.getConceptAgainDelayMinutes()
+
+        conceptScheduleRepository.updateState(key, ease, now, againDelay)
+        _followUpReviewResults.value = _followUpReviewResults.value + (followUp.id to ease)
+
+        when (ease) {
+            ConceptReviewState.EASE_AGAIN -> vibrateManager.vibrateLong()
+            ConceptReviewState.EASE_HARD -> vibrateManager.vibrateMedium()
+            ConceptReviewState.EASE_GOOD -> vibrateManager.vibrateDoubleShort()
+            ConceptReviewState.EASE_EASY -> vibrateManager.vibrateShort()
+        }
+
+        val nextIdx = _currentFollowUpIndex.value + 1
+        if (nextIdx < _dueFollowUpQueue.value.size) {
+            _currentFollowUpIndex.value = nextIdx
+            showFollowUpFront()
+        } else {
+            finishFollowUpFlow()
+        }
+    }
+
+    private fun finishFollowUpFlow() {
+        AppLogger.i(TAG, "Follow-up flow finished, returning to main card BACK")
+        _gestureFeedback.value = FeedbackEvent("追问复习完成")
         _reviewState.value = ReviewState.BACK
-        // Re-speak the main card back text
         currentCard?.let {
             ttsManager.stop()
             ttsManager.speak(getBackTtsText(it))
@@ -435,6 +561,10 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _dueConceptQueue.value = emptyList()
         _currentConceptIndex.value = 0
         _conceptReviewResults.value = emptyMap()
+        _allFollowUpsForCurrentCard.value = emptyList()
+        _dueFollowUpQueue.value = emptyList()
+        _currentFollowUpIndex.value = 0
+        _followUpReviewResults.value = emptyMap()
     }
 
     private fun buryCurrentCard() {
@@ -511,6 +641,15 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                         if (conceptScheduleRepository.isDue(key, now)) {
                             ttsManager.prefetch(concept.question)
                             ttsManager.prefetch(concept.answer)
+                        }
+                    }
+                    // Prefetch follow-up TTS
+                    val followUps = ConceptCardParser.parseFollowUps(card.back, card.id, card.ord)
+                    for (fu in followUps) {
+                        val key = conceptScheduleRepository.buildFollowUpKey(card.id, card.ord, fu.id)
+                        if (conceptScheduleRepository.isDue(key, now)) {
+                            ttsManager.prefetch(fu.question)
+                            ttsManager.prefetch(fu.answer)
                         }
                     }
                 }
@@ -759,18 +898,25 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
         if (actionsForGesture.isEmpty()) return
 
-        // In BACK state with pending concepts, answer or show-answer gestures enter concept flow
+        // In BACK state with pending concepts or follow-ups, enter review flow
         if (_reviewState.value == ReviewState.BACK) {
-            val pendingCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
+            val pendingConceptCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
+            val pendingFollowUpCount = _dueFollowUpQueue.value.size - _followUpReviewResults.value.size
             val conceptEntryActions = setOf(
                 GestureAction.SHOW_ANSWER,
                 GestureAction.ANSWER_AGAIN, GestureAction.ANSWER_HARD,
                 GestureAction.ANSWER_GOOD, GestureAction.ANSWER_EASY
             )
-            if (pendingCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
-                AppLogger.i(TAG, "Gesture in BACK with $pendingCount pending concepts -> entering concept flow")
+            if (pendingConceptCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
+                AppLogger.i(TAG, "Gesture in BACK with $pendingConceptCount pending concepts -> entering concept flow")
                 ttsManager.stop()
                 startConceptFlow()
+                return
+            }
+            if (pendingFollowUpCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
+                AppLogger.i(TAG, "Gesture in BACK with $pendingFollowUpCount pending follow-ups -> entering follow-up flow")
+                ttsManager.stop()
+                startFollowUpFlow()
                 return
             }
         }
@@ -789,6 +935,14 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS }
             }
             ReviewState.CONCEPT_BACK -> {
+                actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS }
+            }
+            ReviewState.FOLLOWUP_FRONT -> {
+                actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
+                    ?: actionsForGesture.find { it == GestureAction.PLAY_TTS }
+            }
+            ReviewState.FOLLOWUP_BACK -> {
                 actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS }
             }
@@ -831,6 +985,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 when (_reviewState.value) {
                     ReviewState.FRONT -> showBack()
                     ReviewState.CONCEPT_FRONT -> showConceptBack()
+                    ReviewState.FOLLOWUP_FRONT -> showFollowUpBack()
                     else -> {}
                 }
             }
@@ -855,30 +1010,40 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                     ReviewState.CONCEPT_BACK -> {
                         currentConcept?.let { ttsManager.speak(it.answer) }
                     }
+                    ReviewState.FOLLOWUP_FRONT -> {
+                        currentFollowUp?.let { ttsManager.speak(it.question) }
+                    }
+                    ReviewState.FOLLOWUP_BACK -> {
+                        currentFollowUp?.let { ttsManager.speak(it.answer) }
+                    }
                     else -> {}
                 }
             }
             GestureAction.ANSWER_AGAIN -> {
                 when (_reviewState.value) {
                     ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_AGAIN)
+                    ReviewState.FOLLOWUP_BACK -> answerFollowUp(ConceptReviewState.EASE_AGAIN)
                     else -> answerCardWithEase(AnkiRepository.EASE_AGAIN)
                 }
             }
             GestureAction.ANSWER_HARD -> {
                 when (_reviewState.value) {
                     ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_HARD)
+                    ReviewState.FOLLOWUP_BACK -> answerFollowUp(ConceptReviewState.EASE_HARD)
                     else -> answerCardWithEase(AnkiRepository.EASE_HARD)
                 }
             }
             GestureAction.ANSWER_GOOD -> {
                 when (_reviewState.value) {
                     ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_GOOD)
+                    ReviewState.FOLLOWUP_BACK -> answerFollowUp(ConceptReviewState.EASE_GOOD)
                     else -> answerCardWithEase(AnkiRepository.EASE_GOOD)
                 }
             }
             GestureAction.ANSWER_EASY -> {
                 when (_reviewState.value) {
                     ReviewState.CONCEPT_BACK -> answerConcept(ConceptReviewState.EASE_EASY)
+                    ReviewState.FOLLOWUP_BACK -> answerFollowUp(ConceptReviewState.EASE_EASY)
                     else -> answerCardWithEase(AnkiRepository.EASE_EASY)
                 }
             }
@@ -897,10 +1062,12 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun answerCardWithEase(ease: Int) {
         if (_reviewState.value == ReviewState.BACK) {
-            // Check if there are pending concepts
-            val pendingCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
+            // Check if there are pending concepts or follow-ups
+            val pendingConceptCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
+            val pendingFollowUpCount = _dueFollowUpQueue.value.size - _followUpReviewResults.value.size
+            val pendingCount = pendingConceptCount + pendingFollowUpCount
             if (pendingCount > 0) {
-                _gestureFeedback.value = FeedbackEvent("还有 $pendingCount 个概念待复习")
+                _gestureFeedback.value = FeedbackEvent("还有 $pendingCount 个项目待复习")
                 return
             }
 
@@ -921,7 +1088,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     }
 
     private fun calculateEffectiveEase(userEase: Int): Int {
-        val results = _conceptReviewResults.value
+        val results = _conceptReviewResults.value + _followUpReviewResults.value
         if (results.isEmpty()) return userEase
 
         val worstConceptEase = results.values.minOrNull() ?: return userEase
