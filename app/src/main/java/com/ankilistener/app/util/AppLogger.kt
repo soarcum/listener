@@ -173,6 +173,7 @@ object AppLogger {
             } catch (e: Exception) {
                 Log.e("AppLogger", "Failed to clear log file", e)
             }
+            Unit
         }
         notifyListeners()
     }
