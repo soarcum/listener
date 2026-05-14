@@ -7,6 +7,8 @@ import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -61,17 +63,30 @@ fun LogViewerScreen(onBack: () -> Unit) {
             onDismissRequest = { crashLog = null },
             title = { Text("崩溃日志") },
             text = {
-                Text(
-                    text = log,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
+                Box(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = log,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    copyToClipboard(context, log)
-                }) {
-                    Text("复制")
+                Row {
+                    if (log != "暂无崩溃日志") {
+                        TextButton(onClick = {
+                            AppLogger.clearCrashLog(context)
+                            crashLog = null
+                            Toast.makeText(context, "崩溃日志已清理", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Text("清理", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    TextButton(onClick = {
+                        copyToClipboard(context, log)
+                    }) {
+                        Text("复制")
+                    }
                 }
             },
             dismissButton = {

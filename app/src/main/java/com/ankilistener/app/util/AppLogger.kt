@@ -31,7 +31,7 @@ object AppLogger {
         }
     }
 
-    private const val MAX_ENTRIES = 500
+    private const val MAX_ENTRIES = 1000
     private val entries = CopyOnWriteArrayList<LogEntry>()
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private var logFile: File? = null
@@ -45,7 +45,7 @@ object AppLogger {
         loadPersistedEntries()
     }
 
-    private const val MAX_FILE_SIZE = 50 * 1024L // 50KB
+    private const val MAX_FILE_SIZE = 1024 * 1024L // 1MB
 
     private fun loadPersistedEntries() {
         val file = logFile ?: return
@@ -142,10 +142,8 @@ object AppLogger {
         while (entries.size > MAX_ENTRIES) {
             entries.removeAt(0)
         }
-        // Persist ERROR and WARN entries to file
-        if (level == Level.ERROR || level == Level.WARN) {
-            persistEntry(entry)
-        }
+        // Persist all entries to file for debugging
+        persistEntry(entry)
         notifyListeners()
     }
 
@@ -175,8 +173,18 @@ object AppLogger {
             } catch (e: Exception) {
                 Log.e("AppLogger", "Failed to clear log file", e)
             }
-            Unit
         }
         notifyListeners()
+    }
+
+    fun clearCrashLog(context: Context) {
+        try {
+            val crashFile = File(context.filesDir, "crash.log")
+            if (crashFile.exists()) {
+                crashFile.delete()
+            }
+        } catch (e: Exception) {
+            Log.e("AppLogger", "Failed to clear crash log", e)
+        }
     }
 }
