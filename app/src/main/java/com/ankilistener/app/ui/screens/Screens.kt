@@ -152,6 +152,24 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
         }
     }
 
+    if (state == ReviewState.LOADING) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    if (state == ReviewState.NO_CARDS) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("今日无待复习卡片", style = MaterialTheme.typography.headlineMedium)
+        }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(1500)
+            onFinished()
+        }
+        return
+    }
+
     if (state == ReviewState.FINISHED) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("复习完成", style = MaterialTheme.typography.headlineLarge)

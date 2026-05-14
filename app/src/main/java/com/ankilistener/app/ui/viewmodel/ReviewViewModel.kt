@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class ReviewState {
-    FRONT, BACK, CONCEPT_FRONT, CONCEPT_BACK, FOLLOWUP_FRONT, FOLLOWUP_BACK, FINISHED, LOADING
+    FRONT, BACK, CONCEPT_FRONT, CONCEPT_BACK, FOLLOWUP_FRONT, FOLLOWUP_BACK, FINISHED, LOADING, NO_CARDS
 }
 
 /**
@@ -214,8 +214,8 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                     prefetchUpcoming()
                     AppLogger.i(TAG, "Step 6: All done")
                 } else {
-                    AppLogger.i(TAG, "Step 4: No cards, finishing")
-                    finishReview()
+                    AppLogger.i(TAG, "Step 4: No cards")
+                    _reviewState.value = ReviewState.NO_CARDS
                 }
             } catch (e: Throwable) {
                 AppLogger.e(TAG, "startReview CRASHED at some step", e)
