@@ -236,10 +236,19 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
                     // Show answer only (without duplicated question), with concept link highlighting
                     val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back))
+                    val revealSteps by viewModel.revealSteps
+                    val currentSegmentStep by viewModel.currentSegmentStep
+                    
+                    val displayedAnswer = if (state == ReviewState.BACK && revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size) {
+                        revealSteps[currentSegmentStep]
+                    } else {
+                        answerOnly
+                    }
+                    
                     val conceptColorMap = viewModel.getConceptColorMap()
                     val defaultColor = MaterialTheme.colorScheme.primary
                     Text(
-                        text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
+                        text = parseConceptLinks(displayedAnswer, defaultColor, conceptColorMap),
                         fontSize = (22 * fontScale).sp,
                         textAlign = TextAlign.Center,
                         lineHeight = (30 * fontScale).sp

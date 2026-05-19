@@ -178,6 +178,15 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private val _followUpReviewResults = mutableStateOf<Map<String, Int>>(emptyMap())
     val followUpReviewResults: State<Map<String, Int>> = _followUpReviewResults
 
+    // ---- Segmented Response state ----
+    private val _currentSegmentStep = mutableStateOf(0)
+    val currentSegmentStep: State<Int> = _currentSegmentStep
+
+    private val _revealSteps = mutableStateOf<List<String>>(emptyList())
+    val revealSteps: State<List<String>> = _revealSteps
+
+    private val _ttsSteps = mutableStateOf<List<String>>(emptyList())
+
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
     private var currentDeckId: Long? = null
     private var aiSessionId: String? = null
@@ -251,20 +260,74 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             val hasFollowUps = _dueFollowUpQueue.value.isNotEmpty()
             AppLogger.i(TAG, "showBack: noteId=${it.id}, ord=${it.ord}, hasConcepts=$hasConcepts, hasFollowUps=$hasFollowUps")
             ttsManager.stop()
-            val backTtsText = getBackTtsText(it)
-            ttsManager.speak(backTtsText) {
-                AppLogger.d(TAG, "showBack: TTS finished callback, hasConcepts=$hasConcepts, hasFollowUps=$hasFollowUps, state=${_reviewState.value}")
-                if (_reviewState.value == ReviewState.BACK) {
-                    when {
-                        hasConcepts -> {
-                            AppLogger.i(TAG, "showBack: auto-starting concept flow")
-                            startConceptFlow()
-                        }
-                        hasFollowUps -> {
-                            AppLogger.i(TAG, "showBack: auto-starting follow-up flow")
-                            startFollowUpFlow()
+            
+            val isSegmentedEnabled = settingsRepository.getSegmentedResponseEnabled()
+            val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back))
+            
+            var useSegments = false
+            if (isSegmentedEnabled) {
+                // Find tags like (背景), （任务） at the beginning of a line or text, up to 10 chars inside
+                val regex = Regex("(?m)^([(（][^)）]{1,10}[)）])")
+                val matches = regex.findAll(answerOnly).toList()
+                if (matches.size > 1 || (matches.size == 1 && matches[0].range.first == 0)) {
+                    useSegments = true
+                    val rSteps = mutableListOf<String>()
+                    val tSteps = mutableListOf<String>()
+                    var accumulated = ""
+                    
+                    if (matches.isNotEmpty() && matches[0].range.first > 0) {
+                        val intro = answerOnly.substring(0, matches[0].range.first)
+                        accumulated += intro
+                        rSteps.add(accumulated.trim())
+                        tSteps.add(intro.trim())
+                    }
+                    
+                    for (i in matches.indices) {
+                        val match = matches[i]
+                        val label = match.groupValues[1]
+                        val start = match.range.last + 1
+                        val end = if (i + 1 < matches.size) matches[i + 1].range.first else answerOnly.length
+                        val content = answerOnly.substring(start, end)
+                        
+                        rSteps.add((accumulated + label).trim())
+                        tSteps.add(label)
+                        
+                        accumulated += label + content
+                        rSteps.add(accumulated.trim())
+                        tSteps.add(content.trim())
+                    }
+                    
+                    _revealSteps.value = rSteps
+                    _ttsSteps.value = tSteps
+                    _currentSegmentStep.value = 0
+                }
+            }
+            
+            if (!useSegments) {
+                _revealSteps.value = emptyList()
+                _ttsSteps.value = emptyList()
+                _currentSegmentStep.value = 0
+                
+                val backTtsText = getBackTtsText(it)
+                ttsManager.speak(backTtsText) {
+                    AppLogger.d(TAG, "showBack: TTS finished callback, hasConcepts=$hasConcepts, hasFollowUps=$hasFollowUps, state=${_reviewState.value}")
+                    if (_reviewState.value == ReviewState.BACK) {
+                        when {
+                            hasConcepts -> {
+                                AppLogger.i(TAG, "showBack: auto-starting concept flow")
+                                startConceptFlow()
+                            }
+                            hasFollowUps -> {
+                                AppLogger.i(TAG, "showBack: auto-starting follow-up flow")
+                                startFollowUpFlow()
+                            }
                         }
                     }
+                }
+            } else {
+                val ttsText = _ttsSteps.value[0]
+                ttsManager.speak(ttsText) {
+                    // Do not auto-advance for segments, let user interact
                 }
             }
         }
@@ -891,7 +954,10 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
         if (actionsForGesture.isEmpty()) return
 
-        // In BACK state with pending concepts or follow-ups, enter review flow
+        // In BACK state, check if segments are fully revealed
+        val isFullyRevealed = _revealSteps.value.isEmpty() || _currentSegmentStep.value >= _revealSteps.value.size - 1
+
+        // In BACK state with pending concepts or follow-ups, enter review flow (if fully revealed)
         if (_reviewState.value == ReviewState.BACK) {
             val pendingConceptCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
             val pendingFollowUpCount = _dueFollowUpQueue.value.size - _followUpReviewResults.value.size
@@ -900,17 +966,24 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 GestureAction.ANSWER_AGAIN, GestureAction.ANSWER_HARD,
                 GestureAction.ANSWER_GOOD, GestureAction.ANSWER_EASY
             )
-            if (pendingConceptCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
-                AppLogger.i(TAG, "Gesture in BACK with $pendingConceptCount pending concepts -> entering concept flow")
-                ttsManager.stop()
-                startConceptFlow()
-                return
-            }
-            if (pendingFollowUpCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
-                AppLogger.i(TAG, "Gesture in BACK with $pendingFollowUpCount pending follow-ups -> entering follow-up flow")
-                ttsManager.stop()
-                startFollowUpFlow()
-                return
+            
+            // If segments are not fully revealed, and the action is SHOW_ANSWER, we don't intercept it here.
+            // Let executeAction handle it to advance the segment.
+            val shouldInterceptForConcepts = isFullyRevealed || !actionsForGesture.contains(GestureAction.SHOW_ANSWER)
+            
+            if (shouldInterceptForConcepts) {
+                if (pendingConceptCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
+                    AppLogger.i(TAG, "Gesture in BACK with $pendingConceptCount pending concepts -> entering concept flow")
+                    ttsManager.stop()
+                    startConceptFlow()
+                    return
+                }
+                if (pendingFollowUpCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
+                    AppLogger.i(TAG, "Gesture in BACK with $pendingFollowUpCount pending follow-ups -> entering follow-up flow")
+                    ttsManager.stop()
+                    startFollowUpFlow()
+                    return
+                }
             }
         }
 
@@ -977,6 +1050,22 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             GestureAction.SHOW_ANSWER -> {
                 when (_reviewState.value) {
                     ReviewState.FRONT -> showBack()
+                    ReviewState.BACK -> {
+                        if (_revealSteps.value.isNotEmpty() && _currentSegmentStep.value < _revealSteps.value.size - 1) {
+                            _currentSegmentStep.value++
+                            ttsManager.stop()
+                            ttsManager.speak(_ttsSteps.value[_currentSegmentStep.value]) {
+                                // Do not auto-advance segments
+                            }
+                        } else if (_revealSteps.value.isNotEmpty() && _currentSegmentStep.value == _revealSteps.value.size - 1) {
+                            val hasConcepts = _dueConceptQueue.value.isNotEmpty()
+                            val hasFollowUps = _dueFollowUpQueue.value.isNotEmpty()
+                            when {
+                                hasConcepts -> startConceptFlow()
+                                hasFollowUps -> startFollowUpFlow()
+                            }
+                        }
+                    }
                     ReviewState.CONCEPT_FRONT -> showConceptBack()
                     ReviewState.FOLLOWUP_FRONT -> showFollowUpBack()
                     else -> {}

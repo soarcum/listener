@@ -139,10 +139,18 @@ object HtmlUtils {
         // Anki standard separator for back side
         val parts = html.split(Regex("<hr\\s+id=[\"']?answer[\"']?\\s*/?>", RegexOption.IGNORE_CASE))
         val answerHtml = if (parts.size > 1) parts.last().trim() else html
-        // Remove HTML tags but preserve [[]] links
-        return answerHtml
-            .replace(Regex("<[^>]+>"), "") // Remove HTML tags
-            .replace(Regex("\\s+"), " ") // Normalize whitespace
-            .trim()
+        
+        // Convert block elements and line breaks to newlines to preserve structure
+        val withNewlines = answerHtml
+            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("</p>|</div>|<div[^>]*>|<p[^>]*>", RegexOption.IGNORE_CASE), "\n")
+            .replace(Regex("<[^>]+>"), "") // Remove other HTML tags
+        
+        // Normalize spaces but preserve newlines
+        return withNewlines
+            .split("\n")
+            .map { it.replace(Regex("[ \\t]+"), " ").trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
     }
 }

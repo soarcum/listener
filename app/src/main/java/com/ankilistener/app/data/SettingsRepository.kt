@@ -297,6 +297,14 @@ class SettingsRepository(context: Context) {
         ttsPrefs.edit().putInt("concept_again_delay", minutes.coerceAtLeast(1)).apply()
     }
 
+    fun getSegmentedResponseEnabled(): Boolean {
+        return ttsPrefs.getBoolean("segmented_response_enabled", true)
+    }
+
+    fun setSegmentedResponseEnabled(enabled: Boolean) {
+        ttsPrefs.edit().putBoolean("segmented_response_enabled", enabled).apply()
+    }
+
     // ---- AI Answer Settings ----
 
     fun getAiEnabled(): Boolean {

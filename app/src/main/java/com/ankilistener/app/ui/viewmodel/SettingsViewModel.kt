@@ -35,7 +35,8 @@ data class AiAnswerSettings(
 data class ConceptSettings(
     val enabled: Boolean = true,
     val dueOnly: Boolean = true,
-    val againDelayMinutes: Int = 10
+    val againDelayMinutes: Int = 10,
+    val segmentedResponseEnabled: Boolean = true
 )
 
 class SettingsViewModel(
@@ -88,7 +89,8 @@ class SettingsViewModel(
         _conceptSettings.value = ConceptSettings(
             enabled = settingsRepository.getConceptReviewEnabled(),
             dueOnly = settingsRepository.getConceptDueOnly(),
-            againDelayMinutes = settingsRepository.getConceptAgainDelayMinutes()
+            againDelayMinutes = settingsRepository.getConceptAgainDelayMinutes(),
+            segmentedResponseEnabled = settingsRepository.getSegmentedResponseEnabled()
         )
         _themeMode.value = settingsRepository.getThemeMode()
         refreshCacheStats()
@@ -240,6 +242,11 @@ class SettingsViewModel(
     fun updateConceptAgainDelayMinutes(minutes: Int) {
         settingsRepository.setConceptAgainDelayMinutes(minutes)
         _conceptSettings.value = _conceptSettings.value.copy(againDelayMinutes = minutes)
+    }
+
+    fun updateConceptSegmentedResponseEnabled(enabled: Boolean) {
+        settingsRepository.setSegmentedResponseEnabled(enabled)
+        _conceptSettings.value = _conceptSettings.value.copy(segmentedResponseEnabled = enabled)
     }
 
     fun updateThemeMode(mode: ThemeMode) {

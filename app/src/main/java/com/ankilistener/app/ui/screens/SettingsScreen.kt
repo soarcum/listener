@@ -277,6 +277,29 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
+                            Text("主卡背面分段展示", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "按 (背景)、(任务) 等标签分段揭开主卡",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = conceptSettings.segmentedResponseEnabled,
+                            onCheckedChange = { viewModel.updateConceptSegmentedResponseEnabled(it) }
+                        )
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text("只复习到期子概念", style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 "关闭时每次主卡都追问所有子概念",
