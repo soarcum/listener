@@ -199,6 +199,21 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private val _currentFlowStepIndex = mutableStateOf(-1)
 
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
+    
+    val isMainCardRevealed: Boolean
+        get() {
+            val steps = _flowSteps.value
+            val idx = _currentFlowStepIndex.value
+            if (idx < 0 || idx >= steps.size) return false
+            for (i in 0..idx) {
+                val step = steps[i]
+                if (step is ReviewFlowStep.MainCardFull || step is ReviewFlowStep.MainCardSegment) {
+                    return true
+                }
+            }
+            return false
+        }
+        
     private var currentDeckId: Long? = null
     private var aiSessionId: String? = null
     private val aiTurnHistory = mutableListOf<AiReviewTurnRecord>()
@@ -246,6 +261,12 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun showFront() {
         _reviewState.value = ReviewState.FRONT
+        _flowSteps.value = emptyList()
+        _currentFlowStepIndex.value = -1
+        _revealSteps.value = emptyList()
+        _ttsSteps.value = emptyList()
+        _currentSegmentStep.value = 0
+        
         currentCard?.let {
             try {
                 resetAiSessionForCard(it)
@@ -1007,7 +1028,8 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.UNDO }
             }
             ReviewState.BACK -> {
-                actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
+                actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
+                    ?: actionsForGesture.find { it == GestureAction.ANSWER_AGAIN || it == GestureAction.ANSWER_HARD || it == GestureAction.ANSWER_GOOD || it == GestureAction.ANSWER_EASY }
                     ?: actionsForGesture.find { it == GestureAction.PLAY_TTS || it == GestureAction.SKIP || it == GestureAction.UNDO }
             }
             ReviewState.CONCEPT_FRONT -> {

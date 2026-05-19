@@ -239,7 +239,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     val revealSteps by viewModel.revealSteps
                     val currentSegmentStep by viewModel.currentSegmentStep
                     
-                    val displayedAnswer = if (state == ReviewState.BACK && revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size) {
+                    val displayedAnswer = if (revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size) {
                         revealSteps[currentSegmentStep]
                     } else {
                         answerOnly
