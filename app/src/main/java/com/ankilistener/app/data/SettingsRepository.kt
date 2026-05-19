@@ -67,6 +67,13 @@ enum class ThemeMode {
     DARK
 }
 
+enum class ReviewOrder {
+    MAIN_CONCEPT_FOLLOWUP,
+    CONCEPT_MAIN_FOLLOWUP,
+    FOLLOWUP_CONCEPT_MAIN,
+    INTERLEAVED
+}
+
 enum class GestureAction {
     NONE,
     SKIP,
@@ -303,6 +310,19 @@ class SettingsRepository(context: Context) {
 
     fun setSegmentedResponseEnabled(enabled: Boolean) {
         ttsPrefs.edit().putBoolean("segmented_response_enabled", enabled).apply()
+    }
+
+    fun getReviewOrder(): ReviewOrder {
+        val name = ttsPrefs.getString("review_order", ReviewOrder.MAIN_CONCEPT_FOLLOWUP.name) ?: ReviewOrder.MAIN_CONCEPT_FOLLOWUP.name
+        return try {
+            ReviewOrder.valueOf(name)
+        } catch (e: Exception) {
+            ReviewOrder.MAIN_CONCEPT_FOLLOWUP
+        }
+    }
+
+    fun setReviewOrder(order: ReviewOrder) {
+        ttsPrefs.edit().putString("review_order", order.name).apply()
     }
 
     // ---- AI Answer Settings ----

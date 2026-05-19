@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
 import com.ankilistener.app.data.SettingsRepository
+import com.ankilistener.app.data.ReviewOrder
 import com.ankilistener.app.data.ThemeMode
 import com.ankilistener.app.data.TtsScheme
 import com.ankilistener.app.data.TtsSchemeItem
@@ -36,7 +37,8 @@ data class ConceptSettings(
     val enabled: Boolean = true,
     val dueOnly: Boolean = true,
     val againDelayMinutes: Int = 10,
-    val segmentedResponseEnabled: Boolean = true
+    val segmentedResponseEnabled: Boolean = true,
+    val reviewOrder: ReviewOrder = ReviewOrder.MAIN_CONCEPT_FOLLOWUP
 )
 
 class SettingsViewModel(
@@ -90,7 +92,8 @@ class SettingsViewModel(
             enabled = settingsRepository.getConceptReviewEnabled(),
             dueOnly = settingsRepository.getConceptDueOnly(),
             againDelayMinutes = settingsRepository.getConceptAgainDelayMinutes(),
-            segmentedResponseEnabled = settingsRepository.getSegmentedResponseEnabled()
+            segmentedResponseEnabled = settingsRepository.getSegmentedResponseEnabled(),
+            reviewOrder = settingsRepository.getReviewOrder()
         )
         _themeMode.value = settingsRepository.getThemeMode()
         refreshCacheStats()
@@ -247,6 +250,11 @@ class SettingsViewModel(
     fun updateConceptSegmentedResponseEnabled(enabled: Boolean) {
         settingsRepository.setSegmentedResponseEnabled(enabled)
         _conceptSettings.value = _conceptSettings.value.copy(segmentedResponseEnabled = enabled)
+    }
+
+    fun updateReviewOrder(order: ReviewOrder) {
+        settingsRepository.setReviewOrder(order)
+        _conceptSettings.value = _conceptSettings.value.copy(reviewOrder = order)
     }
 
     fun updateThemeMode(mode: ThemeMode) {

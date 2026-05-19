@@ -44,6 +44,13 @@ data class PrefetchStatus(
     val prefetchCount: Int = 0
 )
 
+sealed class ReviewFlowStep {
+    object MainCardFull : ReviewFlowStep()
+    data class MainCardSegment(val index: Int) : ReviewFlowStep()
+    data class Concept(val indexInQueue: Int, val conceptCard: com.ankilistener.app.data.ConceptCard) : ReviewFlowStep()
+    data class FollowUp(val indexInQueue: Int, val followUpCard: com.ankilistener.app.data.FollowUpCard) : ReviewFlowStep()
+}
+
 enum class AiAnswerPhase {
     IDLE, RECORDING, SUBMITTING
 }
@@ -187,6 +194,10 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private val _ttsSteps = mutableStateOf<List<String>>(emptyList())
 
+    // ---- Review Flow Engine ----
+    private val _flowSteps = mutableStateOf<List<ReviewFlowStep>>(emptyList())
+    private val _currentFlowStepIndex = mutableStateOf(-1)
+
     val currentCard: Card? get() = _currentCards.value.getOrNull(_currentIndex.value)
     private var currentDeckId: Long? = null
     private var aiSessionId: String? = null
@@ -255,16 +266,13 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         // Prepare concept and follow-up queues for this card
         prepareConceptQueue()
         prepareFollowUpQueue()
-        currentCard?.let {
-            val hasConcepts = _dueConceptQueue.value.isNotEmpty()
-            val hasFollowUps = _dueFollowUpQueue.value.isNotEmpty()
-            AppLogger.i(TAG, "showBack: noteId=${it.id}, ord=${it.ord}, hasConcepts=$hasConcepts, hasFollowUps=$hasFollowUps")
-            ttsManager.stop()
-            
+        currentCard?.let { card ->
             val isSegmentedEnabled = settingsRepository.getSegmentedResponseEnabled()
-            val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back))
+            val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(card.back))
             
+            val segments = mutableListOf<ReviewFlowStep.MainCardSegment>()
             var useSegments = false
+            
             if (isSegmentedEnabled) {
                 // Find tags like (背景), （任务） at the beginning of a line or text, up to 10 chars inside
                 val regex = Regex("(?m)^([(（][^)）]{1,10}[)）])")
@@ -280,6 +288,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                         accumulated += intro
                         rSteps.add(accumulated.trim())
                         tSteps.add(intro.trim())
+                        segments.add(ReviewFlowStep.MainCardSegment(segments.size))
                     }
                     
                     for (i in matches.indices) {
@@ -291,44 +300,121 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                         
                         rSteps.add((accumulated + label).trim())
                         tSteps.add(label)
+                        segments.add(ReviewFlowStep.MainCardSegment(segments.size))
                         
                         accumulated += label + content
                         rSteps.add(accumulated.trim())
                         tSteps.add(content.trim())
+                        segments.add(ReviewFlowStep.MainCardSegment(segments.size))
                     }
                     
                     _revealSteps.value = rSteps
                     _ttsSteps.value = tSteps
-                    _currentSegmentStep.value = 0
                 }
             }
             
             if (!useSegments) {
                 _revealSteps.value = emptyList()
                 _ttsSteps.value = emptyList()
-                _currentSegmentStep.value = 0
-                
-                val backTtsText = getBackTtsText(it)
-                ttsManager.speak(backTtsText) {
-                    AppLogger.d(TAG, "showBack: TTS finished callback, hasConcepts=$hasConcepts, hasFollowUps=$hasFollowUps, state=${_reviewState.value}")
-                    if (_reviewState.value == ReviewState.BACK) {
-                        when {
-                            hasConcepts -> {
-                                AppLogger.i(TAG, "showBack: auto-starting concept flow")
-                                startConceptFlow()
+            }
+            _currentSegmentStep.value = 0
+
+            // Build Flow Queue
+            val concepts = _dueConceptQueue.value.mapIndexed { idx, c -> ReviewFlowStep.Concept(idx, c) }
+            val followUps = _dueFollowUpQueue.value.mapIndexed { idx, fu -> ReviewFlowStep.FollowUp(idx, fu) }
+            val mainCards = if (useSegments) segments else listOf(ReviewFlowStep.MainCardFull)
+            
+            val order = settingsRepository.getReviewOrder()
+            val steps = mutableListOf<ReviewFlowStep>()
+            
+            when (order) {
+                com.ankilistener.app.data.ReviewOrder.MAIN_CONCEPT_FOLLOWUP -> {
+                    steps.addAll(mainCards)
+                    steps.addAll(concepts)
+                    steps.addAll(followUps)
+                }
+                com.ankilistener.app.data.ReviewOrder.CONCEPT_MAIN_FOLLOWUP -> {
+                    steps.addAll(concepts)
+                    steps.addAll(mainCards)
+                    steps.addAll(followUps)
+                }
+                com.ankilistener.app.data.ReviewOrder.FOLLOWUP_CONCEPT_MAIN -> {
+                    steps.addAll(followUps)
+                    steps.addAll(concepts)
+                    steps.addAll(mainCards)
+                }
+                com.ankilistener.app.data.ReviewOrder.INTERLEAVED -> {
+                    if (useSegments) {
+                        val usedConcepts = mutableSetOf<String>()
+                        segments.forEach { seg ->
+                            steps.add(seg)
+                            val segmentText = _revealSteps.value[seg.index]
+                            val conceptsInSeg = concepts.filter { 
+                                it.conceptCard.id in segmentText || it.conceptCard.title in segmentText 
                             }
-                            hasFollowUps -> {
-                                AppLogger.i(TAG, "showBack: auto-starting follow-up flow")
-                                startFollowUpFlow()
-                            }
+                            val newConcepts = conceptsInSeg.filter { it.conceptCard.id !in usedConcepts }
+                            steps.addAll(newConcepts)
+                            usedConcepts.addAll(newConcepts.map { it.conceptCard.id })
+                        }
+                        val remainingConcepts = concepts.filter { it.conceptCard.id !in usedConcepts }
+                        steps.addAll(remainingConcepts)
+                        steps.addAll(followUps)
+                    } else {
+                        steps.addAll(mainCards)
+                        steps.addAll(concepts)
+                        steps.addAll(followUps)
+                    }
+                }
+            }
+            
+            _flowSteps.value = steps
+            _currentFlowStepIndex.value = -1
+            
+            executeNextFlowStep()
+        }
+    }
+
+    private fun executeNextFlowStep() {
+        val nextIndex = _currentFlowStepIndex.value + 1
+        if (nextIndex >= _flowSteps.value.size) {
+            // Flow finished, wait on main card back
+            _reviewState.value = ReviewState.BACK
+            return
+        }
+        
+        _currentFlowStepIndex.value = nextIndex
+        val step = _flowSteps.value[nextIndex]
+        
+        when (step) {
+            is ReviewFlowStep.MainCardFull -> {
+                _reviewState.value = ReviewState.BACK
+                currentCard?.let { card ->
+                    val text = getBackTtsText(card)
+                    ttsManager.stop()
+                    ttsManager.speak(text) {
+                        if (_reviewState.value == ReviewState.BACK && _currentFlowStepIndex.value == nextIndex) {
+                            // Auto advance after main card finishes speaking
+                            executeNextFlowStep()
                         }
                     }
                 }
-            } else {
-                val ttsText = _ttsSteps.value[0]
-                ttsManager.speak(ttsText) {
-                    // Do not auto-advance for segments, let user interact
+            }
+            is ReviewFlowStep.MainCardSegment -> {
+                _reviewState.value = ReviewState.BACK
+                _currentSegmentStep.value = step.index
+                val text = _ttsSteps.value[step.index]
+                ttsManager.stop()
+                ttsManager.speak(text) {
+                    // Do not auto-advance for segments, user must tap/swipe
                 }
+            }
+            is ReviewFlowStep.Concept -> {
+                _currentConceptIndex.value = step.indexInQueue
+                showConceptFront()
+            }
+            is ReviewFlowStep.FollowUp -> {
+                _currentFollowUpIndex.value = step.indexInQueue
+                showFollowUpFront()
             }
         }
     }
@@ -376,14 +462,14 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         AppLogger.i(TAG, "prepareConceptQueue: ${due.size} due concepts out of ${concepts.size} total")
     }
 
+    // --- Legacy flow triggers are mostly unused but left for compatibility or internal logic ---
     private fun startConceptFlow() {
         val concepts = _dueConceptQueue.value
         if (concepts.isEmpty()) return
-        _currentConceptIndex.value = 0
-        showConceptFront()
         val msg = "开始复习 ${concepts.size} 个相关概念"
         _gestureFeedback.value = FeedbackEvent(msg)
         AppLogger.i(TAG, msg)
+        // We now rely on executeNextFlowStep
     }
 
     private fun showConceptFront() {
@@ -415,14 +501,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         val now = System.currentTimeMillis()
         val againDelay = settingsRepository.getConceptAgainDelayMinutes()
 
-        val oldState = conceptScheduleRepository.getState(key)
-        AppLogger.i(TAG, "Concept answer: ${concept.id}, ease=$ease, oldState=$oldState")
-
         conceptScheduleRepository.updateState(key, ease, now, againDelay)
-
-        val newState = conceptScheduleRepository.getState(key)
-        AppLogger.i(TAG, "Concept answer: ${concept.id}, newState=$newState")
-
         _conceptReviewResults.value = _conceptReviewResults.value + (concept.id to ease)
 
         when (ease) {
@@ -432,29 +511,11 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             ConceptReviewState.EASE_EASY -> vibrateManager.vibrateShort()
         }
 
-        val nextIdx = _currentConceptIndex.value + 1
-        if (nextIdx < _dueConceptQueue.value.size) {
-            _currentConceptIndex.value = nextIdx
-            showConceptFront()
-        } else {
-            finishConceptFlow()
-        }
+        executeNextFlowStep()
     }
 
     private fun finishConceptFlow() {
-        AppLogger.i(TAG, "Concept flow finished")
-        _gestureFeedback.value = FeedbackEvent("相关概念复习完成")
-
-        val hasFollowUps = _dueFollowUpQueue.value.isNotEmpty()
-        if (hasFollowUps) {
-            startFollowUpFlow()
-        } else {
-            _reviewState.value = ReviewState.BACK
-            currentCard?.let {
-                ttsManager.stop()
-                ttsManager.speak(getBackTtsText(it))
-            }
-        }
+        // Unused now
     }
 
     private fun prepareFollowUpQueue() {
@@ -483,8 +544,6 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     private fun startFollowUpFlow() {
         val followUps = _dueFollowUpQueue.value
         if (followUps.isEmpty()) return
-        _currentFollowUpIndex.value = 0
-        showFollowUpFront()
         val msg = "开始复习 ${followUps.size} 个追问"
         _gestureFeedback.value = FeedbackEvent(msg)
         AppLogger.i(TAG, msg)
@@ -529,23 +588,11 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             ConceptReviewState.EASE_EASY -> vibrateManager.vibrateShort()
         }
 
-        val nextIdx = _currentFollowUpIndex.value + 1
-        if (nextIdx < _dueFollowUpQueue.value.size) {
-            _currentFollowUpIndex.value = nextIdx
-            showFollowUpFront()
-        } else {
-            finishFollowUpFlow()
-        }
+        executeNextFlowStep()
     }
 
     private fun finishFollowUpFlow() {
-        AppLogger.i(TAG, "Follow-up flow finished, returning to main card BACK")
-        _gestureFeedback.value = FeedbackEvent("追问复习完成")
-        _reviewState.value = ReviewState.BACK
-        currentCard?.let {
-            ttsManager.stop()
-            ttsManager.speak(getBackTtsText(it))
-        }
+        // Unused now
     }
 
     private fun getBackTtsText(card: Card): String {
@@ -954,39 +1001,6 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
         if (actionsForGesture.isEmpty()) return
 
-        // In BACK state, check if segments are fully revealed
-        val isFullyRevealed = _revealSteps.value.isEmpty() || _currentSegmentStep.value >= _revealSteps.value.size - 1
-
-        // In BACK state with pending concepts or follow-ups, enter review flow (if fully revealed)
-        if (_reviewState.value == ReviewState.BACK) {
-            val pendingConceptCount = _dueConceptQueue.value.size - _conceptReviewResults.value.size
-            val pendingFollowUpCount = _dueFollowUpQueue.value.size - _followUpReviewResults.value.size
-            val conceptEntryActions = setOf(
-                GestureAction.SHOW_ANSWER,
-                GestureAction.ANSWER_AGAIN, GestureAction.ANSWER_HARD,
-                GestureAction.ANSWER_GOOD, GestureAction.ANSWER_EASY
-            )
-            
-            // If segments are not fully revealed, and the action is SHOW_ANSWER, we don't intercept it here.
-            // Let executeAction handle it to advance the segment.
-            val shouldInterceptForConcepts = isFullyRevealed || !actionsForGesture.contains(GestureAction.SHOW_ANSWER)
-            
-            if (shouldInterceptForConcepts) {
-                if (pendingConceptCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
-                    AppLogger.i(TAG, "Gesture in BACK with $pendingConceptCount pending concepts -> entering concept flow")
-                    ttsManager.stop()
-                    startConceptFlow()
-                    return
-                }
-                if (pendingFollowUpCount > 0 && actionsForGesture.any { it in conceptEntryActions }) {
-                    AppLogger.i(TAG, "Gesture in BACK with $pendingFollowUpCount pending follow-ups -> entering follow-up flow")
-                    ttsManager.stop()
-                    startFollowUpFlow()
-                    return
-                }
-            }
-        }
-
         val action = when (_reviewState.value) {
             ReviewState.FRONT -> {
                 actionsForGesture.find { it == GestureAction.SHOW_ANSWER }
@@ -1051,20 +1065,8 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 when (_reviewState.value) {
                     ReviewState.FRONT -> showBack()
                     ReviewState.BACK -> {
-                        if (_revealSteps.value.isNotEmpty() && _currentSegmentStep.value < _revealSteps.value.size - 1) {
-                            _currentSegmentStep.value++
-                            ttsManager.stop()
-                            ttsManager.speak(_ttsSteps.value[_currentSegmentStep.value]) {
-                                // Do not auto-advance segments
-                            }
-                        } else if (_revealSteps.value.isNotEmpty() && _currentSegmentStep.value == _revealSteps.value.size - 1) {
-                            val hasConcepts = _dueConceptQueue.value.isNotEmpty()
-                            val hasFollowUps = _dueFollowUpQueue.value.isNotEmpty()
-                            when {
-                                hasConcepts -> startConceptFlow()
-                                hasFollowUps -> startFollowUpFlow()
-                            }
-                        }
+                        // Advance to the next flow step! (e.g. next segment, or concept, or followup)
+                        executeNextFlowStep()
                     }
                     ReviewState.CONCEPT_FRONT -> showConceptBack()
                     ReviewState.FOLLOWUP_FRONT -> showFollowUpBack()

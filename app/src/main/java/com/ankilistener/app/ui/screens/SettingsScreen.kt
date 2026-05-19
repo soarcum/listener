@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ankilistener.app.data.GestureAction
 import com.ankilistener.app.data.GestureType
+import com.ankilistener.app.data.ReviewOrder
 import com.ankilistener.app.data.ThemeMode
 import com.ankilistener.app.data.TtsScheme
 import com.ankilistener.app.data.TtsSchemeItem
@@ -339,6 +340,57 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
+                }
+
+                item {
+                    Text(
+                        "复习顺序",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                    var expanded by remember { mutableStateOf(false) }
+                    val orderName = when (conceptSettings.reviewOrder) {
+                        ReviewOrder.MAIN_CONCEPT_FOLLOWUP -> "主卡片 -> 概念 -> 追问"
+                        ReviewOrder.CONCEPT_MAIN_FOLLOWUP -> "概念 -> 主卡片 -> 追问"
+                        ReviewOrder.FOLLOWUP_CONCEPT_MAIN -> "追问 -> 概念 -> 主卡片"
+                        ReviewOrder.INTERLEAVED -> "交织模式 (按片段和概念顺序)"
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = true }
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(orderName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            val options = listOf(
+                                ReviewOrder.MAIN_CONCEPT_FOLLOWUP to "主卡片 -> 概念 -> 追问",
+                                ReviewOrder.CONCEPT_MAIN_FOLLOWUP to "概念 -> 主卡片 -> 追问",
+                                ReviewOrder.FOLLOWUP_CONCEPT_MAIN -> "追问 -> 概念 -> 主卡片",
+                                ReviewOrder.INTERLEAVED to "交织模式 (按片段和概念顺序)"
+                            )
+                            options.forEach { (order, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        viewModel.updateReviewOrder(order)
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
