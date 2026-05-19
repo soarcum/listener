@@ -377,7 +377,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                             val options = listOf(
                                 ReviewOrder.MAIN_CONCEPT_FOLLOWUP to "主卡片 -> 概念 -> 追问",
                                 ReviewOrder.CONCEPT_MAIN_FOLLOWUP to "概念 -> 主卡片 -> 追问",
-                                ReviewOrder.FOLLOWUP_CONCEPT_MAIN -> "追问 -> 概念 -> 主卡片",
+                                ReviewOrder.FOLLOWUP_CONCEPT_MAIN to "追问 -> 概念 -> 主卡片",
                                 ReviewOrder.INTERLEAVED to "交织模式 (按片段和概念顺序)"
                             )
                             options.forEach { (order, label) ->
