@@ -193,6 +193,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
     val revealSteps: State<List<String>> = _revealSteps
 
     private val _ttsSteps = mutableStateOf<List<String>>(emptyList())
+    val ttsSteps: State<List<String>> = _ttsSteps
 
     // ---- Review Flow Engine ----
     private val _flowSteps = mutableStateOf<List<ReviewFlowStep>>(emptyList())

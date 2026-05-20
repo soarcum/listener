@@ -43,6 +43,7 @@ import com.ankilistener.app.util.HtmlUtils
 import com.ankilistener.app.util.HtmlUtils.toAnnotatedString
 import com.ankilistener.app.util.HtmlUtils.parseHtml
 import com.ankilistener.app.util.HtmlUtils.parseConceptLinks
+import com.ankilistener.app.util.HtmlUtils.parseConceptLinksWithFocus
 
 @Composable
 fun PermissionScreen(isInstalled: Boolean, onGrantClick: () -> Unit) {
@@ -239,20 +240,56 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     val revealSteps by viewModel.revealSteps
                     val currentSegmentStep by viewModel.currentSegmentStep
                     
-                    val displayedAnswer = if (revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size) {
-                        revealSteps[currentSegmentStep]
-                    } else {
-                        answerOnly
-                    }
-                    
                     val conceptColorMap = viewModel.getConceptColorMap()
                     val defaultColor = MaterialTheme.colorScheme.primary
-                    Text(
-                        text = parseConceptLinks(displayedAnswer, defaultColor, conceptColorMap),
-                        fontSize = (22 * fontScale).sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = (30 * fontScale).sp
-                    )
+                    
+                    val showSegmentedFocus = revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size
+                    if (showSegmentedFocus) {
+                        val ttsSteps by viewModel.ttsSteps
+                        val idx = currentSegmentStep
+                        
+                        val prefixText = if (ttsSteps.isNotEmpty() && idx < ttsSteps.size) {
+                            val currentSeg = ttsSteps[idx]
+                            val isCurrLabel = currentSeg.trim().let { 
+                                (it.startsWith("(") && it.endsWith(")")) || (it.startsWith("（") && it.endsWith("）")) 
+                            }
+                            val prefixIdx = if (isCurrLabel) idx - 1 else idx - 2
+                            if (prefixIdx >= 0 && prefixIdx < revealSteps.size) {
+                                revealSteps[prefixIdx]
+                            } else {
+                                ""
+                            }
+                        } else {
+                            ""
+                        }
+                        
+                        val fullText = revealSteps[idx]
+                        val focusedText = if (fullText.startsWith(prefixText)) {
+                            fullText.substring(prefixText.length)
+                        } else {
+                            fullText
+                        }
+                        
+                        Text(
+                            text = parseConceptLinksWithFocus(
+                                prefixText = prefixText,
+                                currentText = focusedText,
+                                defaultColor = defaultColor,
+                                conceptColorMap = conceptColorMap,
+                                fadedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                            ),
+                            fontSize = (22 * fontScale).sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = (30 * fontScale).sp
+                        )
+                    } else {
+                        Text(
+                            text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
+                            fontSize = (22 * fontScale).sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = (30 * fontScale).sp
+                        )
+                    }
                 }
             }
         }

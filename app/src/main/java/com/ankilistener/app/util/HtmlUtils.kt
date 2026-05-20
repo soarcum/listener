@@ -72,6 +72,45 @@ object HtmlUtils {
         }
     }
 
+    fun parseConceptLinksWithFocus(
+        prefixText: String,
+        currentText: String,
+        defaultColor: Color,
+        conceptColorMap: Map<String, Color> = emptyMap(),
+        focusedColor: Color = Color.Unspecified,
+        fadedColor: Color = Color.Gray.copy(alpha = 0.4f)
+    ): AnnotatedString {
+        return buildAnnotatedString {
+            if (prefixText.isNotEmpty()) {
+                pushStyle(SpanStyle(color = fadedColor))
+                append(prefixText.replace("[[", "").replace("]]", ""))
+                pop()
+            }
+            if (currentText.isNotEmpty()) {
+                pushStyle(SpanStyle(color = focusedColor))
+                val pattern = Regex("\\[\\[([^\\]]+)\\]\\]")
+                var lastIndex = 0
+                pattern.findAll(currentText).forEach { match ->
+                    append(currentText.substring(lastIndex, match.range.first))
+                    val conceptName = match.groupValues[1]
+                    val color = conceptColorMap[conceptName] ?: defaultColor
+                    pushStyle(SpanStyle(
+                        color = color,
+                        fontWeight = FontWeight.Bold,
+                        background = color.copy(alpha = 0.1f)
+                    ))
+                    append(conceptName)
+                    pop()
+                    lastIndex = match.range.last + 1
+                }
+                if (lastIndex < currentText.length) {
+                    append(currentText.substring(lastIndex))
+                }
+                pop()
+            }
+        }
+    }
+
     /**
      * Converts a Spanned object to Compose AnnotatedString.
      */
