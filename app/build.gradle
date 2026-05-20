@@ -12,8 +12,8 @@ android {
         applicationId "com.ankilistener.app"
         minSdk 24
         targetSdk 34
-        versionCode 64
-        versionName "1.0.48"
+        versionCode 65
+        versionName "1.0.49"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

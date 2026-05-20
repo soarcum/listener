@@ -424,7 +424,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             is ReviewFlowStep.MainCardSegment -> {
                 _reviewState.value = ReviewState.BACK
                 _currentSegmentStep.value = step.index
-                val text = _ttsSteps.value[step.index]
+                val text = _ttsSteps.value[step.index].replace("[[", "").replace("]]", "")
                 ttsManager.stop()
                 ttsManager.speak(text) {
                     // Do not auto-advance for segments, user must tap/swipe
@@ -500,7 +500,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _questionPlaybackFinished.value = false
         AppLogger.d(TAG, "Concept front: ${concept.id} - ${concept.title}")
         ttsManager.stop()
-        ttsManager.speak(concept.question) {
+        ttsManager.speak(concept.question.replace("[[", "").replace("]]", "")) {
             if (_reviewState.value == ReviewState.CONCEPT_FRONT && currentConcept?.id == concept.id) {
                 _questionPlaybackFinished.value = true
             }
@@ -513,7 +513,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _questionPlaybackFinished.value = false
         AppLogger.d(TAG, "Concept back: ${concept.id}")
         ttsManager.stop()
-        ttsManager.speak(concept.answer)
+        ttsManager.speak(concept.answer.replace("[[", "").replace("]]", ""))
     }
 
     private fun answerConcept(ease: Int) {
@@ -577,7 +577,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _questionPlaybackFinished.value = false
         AppLogger.d(TAG, "Follow-up front: ${followUp.id}")
         ttsManager.stop()
-        ttsManager.speak(followUp.question) {
+        ttsManager.speak(followUp.question.replace("[[", "").replace("]]", "")) {
             if (_reviewState.value == ReviewState.FOLLOWUP_FRONT && currentFollowUp?.id == followUp.id) {
                 _questionPlaybackFinished.value = true
             }
@@ -590,7 +590,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _questionPlaybackFinished.value = false
         AppLogger.d(TAG, "Follow-up back: ${followUp.id}")
         ttsManager.stop()
-        ttsManager.speak(followUp.answer)
+        ttsManager.speak(followUp.answer.replace("[[", "").replace("]]", ""))
     }
 
     private fun answerFollowUp(ease: Int) {
@@ -619,7 +619,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     private fun getBackTtsText(card: Card): String {
         val cleaned = HtmlUtils.removeAnkiListenerConceptBlocks(card.back)
-        return HtmlUtils.extractTtsText(cleaned)
+        return HtmlUtils.extractAnswerOnly(cleaned).replace("[[", "").replace("]]", "")
     }
 
     private fun resetAiSessionForCard(card: Card) {
@@ -645,7 +645,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _questionPlaybackFinished.value = false
         val noteId = card.id
         val ord = card.ord
-        ttsManager.speak(HtmlUtils.extractTtsText(card.front)) {
+        ttsManager.speak(HtmlUtils.extractTtsText(card.front).replace("[[", "").replace("]]", "")) {
             val stillCurrent = currentCard?.let { current -> current.id == noteId && current.ord == ord } == true
             if (stillCurrent && _reviewState.value == ReviewState.FRONT) {
                 _questionPlaybackFinished.value = true
@@ -658,7 +658,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         _questionPlaybackFinished.value = false
         val noteId = card.id
         val ord = card.ord
-        ttsManager.speak(question) {
+        ttsManager.speak(question.replace("[[", "").replace("]]", "")) {
             val stillCurrent = currentCard?.let { current -> current.id == noteId && current.ord == ord } == true
             val sameQuestion = _aiAnswerState.value.followUpQuestion == question
             if (stillCurrent && sameQuestion && _reviewState.value == ReviewState.FRONT) {
@@ -1109,19 +1109,28 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                         }
                     }
                     ReviewState.BACK -> {
-                        currentCard?.let { ttsManager.speak(getBackTtsText(it)) }
+                        currentCard?.let { card ->
+                            val revealSteps = _revealSteps.value
+                            val currentSegmentStep = _currentSegmentStep.value
+                            val textToSpeak = if (revealSteps.isNotEmpty() && currentSegmentStep >= 0 && currentSegmentStep < revealSteps.size) {
+                                revealSteps[currentSegmentStep]
+                            } else {
+                                getBackTtsText(card)
+                            }
+                            ttsManager.speak(textToSpeak.replace("[[", "").replace("]]", ""))
+                        }
                     }
                     ReviewState.CONCEPT_FRONT -> {
-                        currentConcept?.let { ttsManager.speak(it.question) }
+                        currentConcept?.let { ttsManager.speak(it.question.replace("[[", "").replace("]]", "")) }
                     }
                     ReviewState.CONCEPT_BACK -> {
-                        currentConcept?.let { ttsManager.speak(it.answer) }
+                        currentConcept?.let { ttsManager.speak(it.answer.replace("[[", "").replace("]]", "")) }
                     }
                     ReviewState.FOLLOWUP_FRONT -> {
-                        currentFollowUp?.let { ttsManager.speak(it.question) }
+                        currentFollowUp?.let { ttsManager.speak(it.question.replace("[[", "").replace("]]", "")) }
                     }
                     ReviewState.FOLLOWUP_BACK -> {
-                        currentFollowUp?.let { ttsManager.speak(it.answer) }
+                        currentFollowUp?.let { ttsManager.speak(it.answer.replace("[[", "").replace("]]", "")) }
                     }
                     else -> {}
                 }
