@@ -256,8 +256,8 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         val defaultColor = MaterialTheme.colorScheme.primary
 
                         if (isSubconceptActive) {
-                            // 【优化重点】当子概念或追问复习处于激活状态时，开启行级精细化排版
-                            val answerLines = answerOnly.split("\n").filter { it.isNotBlank() }
+                            // 【优化重点】当子概念或追问复习处于激活状态时，开启行级精细化排版与概念流自适应拆分
+                            val answerLines = splitIntoConceptBlocks(answerOnly)
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy((4 * fontScale).dp) // 极窄行距，压缩垂直空间
@@ -268,8 +268,15 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                                     if ((state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) && concept != null) {
                                         val conceptTitle = concept.title
                                         val conceptId = concept.id
-                                        // 若行中包含当前子概念的 Title 或 ID，则视为当前活跃段落
-                                        isCurrentActiveLine = (conceptTitle.isNotBlank() && line.contains(conceptTitle)) || line.contains(conceptId)
+                                        
+                                        // 智能首发高精度匹配：提取当前段落的第一个概念链接，避免段落描述文本内提到其他子概念时导致误判
+                                        val firstConcept = getFirstConceptLink(line)
+                                        isCurrentActiveLine = if (firstConcept != null) {
+                                            firstConcept == conceptTitle || firstConcept == conceptId
+                                        } else {
+                                            // 退化匹配：若本段没有带 [[]] 的概念链接，使用模糊包含关系进行兜底匹配
+                                            (conceptTitle.isNotBlank() && line.contains(conceptTitle)) || line.contains(conceptId)
+                                        }
                                     }
 
                                     // 动态计算行级样式：非当前子概念行（例如在复习“行动”时，原本的“背景”、“难点”行）字号压缩至 10.sp，透明度压低至 0.18f（极淡）
@@ -683,5 +690,44 @@ private fun SegmentedReviewOverlay(
             }
         }
     }
+}
+
+/**
+ * 智能概念行自适应拆分算法：
+ * 解决由于 HTML 排版挤压在同一行内的问题。即便在同一行文本中，也能按照 `[[` 概念标识切分成清晰的多个概念段落。
+ */
+private fun splitIntoConceptBlocks(text: String): List<String> {
+    val lines = text.split("\n").filter { it.isNotBlank() }
+    val result = mutableListOf<String>()
+    for (line in lines) {
+        if (line.contains("[[")) {
+            val subParts = line.split(Regex("(?=\\[\\[)"))
+            for (part in subParts) {
+                if (part.isBlank()) continue
+                if (!part.startsWith("[[")) {
+                    if (result.isEmpty()) {
+                        result.add(part.trim())
+                    } else {
+                        val lastIdx = result.size - 1
+                        result[lastIdx] = (result[lastIdx] + " " + part.trim()).trim()
+                    }
+                } else {
+                    result.add(part.trim())
+                }
+            }
+        } else {
+            result.add(line.trim())
+        }
+    }
+    return result.filter { it.isNotBlank() }
+}
+
+/**
+ * 提取文本行中第一个出现的概念链接，用于精确判断该概念行的真实所属性质（如“背景”、“行动”等）
+ */
+private fun getFirstConceptLink(line: String): String? {
+    val pattern = Regex("\\[\\[([^\\]]+)\\]\\]")
+    val match = pattern.find(line)
+    return match?.groupValues?.get(1)
 }
 
