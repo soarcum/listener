@@ -296,85 +296,18 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
 
         // Concept overlay dialog
         if ((state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) && concept != null) {
-            // Get concept color map for highlighting
             val conceptColorMap = viewModel.getConceptColorMap()
             val defaultColor = MaterialTheme.colorScheme.primary
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth(0.88f)
-                        .padding(vertical = 32.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(24.dp)
-                            .verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Progress badge
-                        Text(
-                            text = "概念 ${currentConceptIdx + 1}/${dueConcepts.size}",
-                            fontSize = (13 * fontScale).sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        if (state == ReviewState.CONCEPT_FRONT) {
-                            if (concept.title.isNotBlank()) {
-                                Text(
-                                    text = concept.title,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    fontSize = (18 * fontScale).sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                            }
-                            Text(
-                                text = parseConceptLinks(concept.question, defaultColor, conceptColorMap),
-                                modifier = Modifier.fillMaxWidth(),
-                                fontSize = (20 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                lineHeight = (28 * fontScale).sp
-                            )
-                        } else {
-                            // CONCEPT_BACK
-                            Text(
-                                text = parseConceptLinks(concept.question, defaultColor, conceptColorMap),
-                                modifier = Modifier.fillMaxWidth(),
-                                fontSize = (15 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = (21 * fontScale).sp
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Divider(
-                                modifier = Modifier.fillMaxWidth(0.5f),
-                                thickness = 1.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = parseConceptLinks(concept.answer, defaultColor, conceptColorMap),
-                                modifier = Modifier.fillMaxWidth(),
-                                fontSize = (20 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                lineHeight = (28 * fontScale).sp
-                            )
-                        }
-                    }
-                }
-            }
+            SegmentedReviewOverlay(
+                progressText = "概念 ${currentConceptIdx + 1}/${dueConcepts.size}",
+                titleText = concept.title,
+                questionText = concept.question,
+                answerText = if (state == ReviewState.CONCEPT_BACK) concept.answer else null,
+                fontScale = fontScale,
+                conceptColorMap = conceptColorMap,
+                defaultColor = defaultColor
+            )
         }
 
         // Follow-up overlay dialog
@@ -382,71 +315,14 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
             val conceptColorMap = viewModel.getConceptColorMap()
             val defaultColor = MaterialTheme.colorScheme.primary
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth(0.88f)
-                        .padding(vertical = 32.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(24.dp)
-                            .verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Progress badge
-                        Text(
-                            text = "追问 ${currentFollowUpIdx + 1}/${dueFollowUps.size}",
-                            fontSize = (13 * fontScale).sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        if (state == ReviewState.FOLLOWUP_FRONT) {
-                            Text(
-                                text = parseConceptLinks(followUp.question, defaultColor, conceptColorMap),
-                                modifier = Modifier.fillMaxWidth(),
-                                fontSize = (20 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                lineHeight = (28 * fontScale).sp
-                            )
-                        } else {
-                            // FOLLOWUP_BACK
-                            Text(
-                                text = parseConceptLinks(followUp.question, defaultColor, conceptColorMap),
-                                modifier = Modifier.fillMaxWidth(),
-                                fontSize = (15 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = (21 * fontScale).sp
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Divider(
-                                modifier = Modifier.fillMaxWidth(0.5f),
-                                thickness = 1.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = parseConceptLinks(followUp.answer, defaultColor, conceptColorMap),
-                                modifier = Modifier.fillMaxWidth(),
-                                fontSize = (20 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                lineHeight = (28 * fontScale).sp
-                            )
-                        }
-                    }
-                }
-            }
+            SegmentedReviewOverlay(
+                progressText = "追问 ${currentFollowUpIdx + 1}/${dueFollowUps.size}",
+                questionText = followUp.question,
+                answerText = if (state == ReviewState.FOLLOWUP_BACK) followUp.answer else null,
+                fontScale = fontScale,
+                conceptColorMap = conceptColorMap,
+                defaultColor = defaultColor
+            )
         }
 
         // Mark Button (subtle star icon at top right)
@@ -648,3 +524,112 @@ private fun AiAnswerPanel(
         }
     }
 }
+
+/**
+ * 通用的分段复习与追问卡片浮层组件
+ * 经过精细化的尺寸缩小与排版优化，提供低视觉抢占、优雅小巧的现代化界面。
+ */
+@Composable
+private fun SegmentedReviewOverlay(
+    progressText: String,
+    titleText: String = "",
+    questionText: String,
+    answerText: String? = null,
+    fontScale: Float,
+    conceptColorMap: Map<String, Color>,
+    defaultColor: Color
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.4f)), // 降低遮罩透明度，让底色更柔和
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.82f) // 精巧的卡片宽度
+                .padding(vertical = 24.dp),
+            shape = RoundedCornerShape(12.dp), // 更精细现代的圆角
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp, vertical = 18.dp) // 精简内边距
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 精致的胶囊状态进度徽章
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    Text(
+                        text = progressText,
+                        fontSize = (11 * fontScale).sp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                    )
+                }
+
+                // 子概念标题（仅在有值时显示）
+                if (titleText.isNotBlank()) {
+                    Text(
+                        text = titleText,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        fontSize = (15 * fontScale).sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                if (answerText == null) {
+                    // 提问状态 (FRONT)
+                    Text(
+                        text = parseConceptLinks(questionText, defaultColor, conceptColorMap),
+                        modifier = Modifier.fillMaxWidth(),
+                        fontSize = (16 * fontScale).sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = (22 * fontScale).sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    // 回答与解析状态 (BACK)
+                    // 1. 已提问的问题（字号进一步缩小，降低视觉抢占）
+                    Text(
+                        text = parseConceptLinks(questionText, defaultColor, conceptColorMap),
+                        modifier = Modifier.fillMaxWidth(),
+                        fontSize = (12 * fontScale).sp,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        lineHeight = (17 * fontScale).sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // 2. 极细且窄的优雅分割线
+                    Divider(
+                        modifier = Modifier.fillMaxWidth(0.4f),
+                        thickness = 0.8.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // 3. 行动/概念的答案
+                    Text(
+                        text = parseConceptLinks(answerText, defaultColor, conceptColorMap),
+                        modifier = Modifier.fillMaxWidth(),
+                        fontSize = (16 * fontScale).sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = (22 * fontScale).sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
