@@ -229,78 +229,117 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     )
                 } else if (state == ReviewState.BACK || state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK || state == ReviewState.FOLLOWUP_FRONT || state == ReviewState.FOLLOWUP_BACK) {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.alpha(if (isSubconceptActive) 0.45f else 1.0f)
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Show question (smaller)
+                        // 1. 背景问题显示：在子概念激活时，不仅变小，透明度也同步降低，退居极次要层
                         Text(
                             text = parseHtml(it.front).toAnnotatedString(),
                             fontSize = if (isSubconceptActive) (12 * fontScale).sp else (16 * fontScale).sp,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = if (isSubconceptActive) (17 * fontScale).sp else (22 * fontScale).sp
+                            lineHeight = if (isSubconceptActive) (17 * fontScale).sp else (22 * fontScale).sp,
+                            modifier = Modifier.alpha(if (isSubconceptActive) 0.3f else 1.0f)
                         )
                         Spacer(modifier = Modifier.height(if (isSubconceptActive) 10.dp else 24.dp))
                         Divider(
-                            modifier = Modifier.fillMaxWidth(if (isSubconceptActive) 0.3f else 0.6f),
+                            modifier = Modifier
+                                .fillMaxWidth(if (isSubconceptActive) 0.3f else 0.6f)
+                                .alpha(if (isSubconceptActive) 0.2f else 1.0f),
                             thickness = 0.8.dp,
                             color = MaterialTheme.colorScheme.outlineVariant
                         )
                         Spacer(modifier = Modifier.height(if (isSubconceptActive) 10.dp else 24.dp))
-                        // Show answer only (without duplicated question), with concept link highlighting
+
+                        // 2. 背景答案渲染：提取主答案文本
                         val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back))
-                        val revealSteps by viewModel.revealSteps
-                        val currentSegmentStep by viewModel.currentSegmentStep
-                        
                         val conceptColorMap = viewModel.getConceptColorMap()
                         val defaultColor = MaterialTheme.colorScheme.primary
-                        
-                        val showSegmentedFocus = revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size
-                        if (showSegmentedFocus) {
-                            val ttsSteps by viewModel.ttsSteps
-                            val idx = currentSegmentStep
-                            
-                            val prefixText = if (ttsSteps.isNotEmpty() && idx < ttsSteps.size) {
-                                val currentSeg = ttsSteps[idx]
-                                val isCurrLabel = currentSeg.trim().let { 
-                                    (it.startsWith("(") && it.endsWith(")")) || (it.startsWith("（") && it.endsWith("）")) 
+
+                        if (isSubconceptActive) {
+                            // 【优化重点】当子概念或追问复习处于激活状态时，开启行级精细化排版
+                            val answerLines = answerOnly.split("\n").filter { it.isNotBlank() }
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy((4 * fontScale).dp) // 极窄行距，压缩垂直空间
+                            ) {
+                                answerLines.forEach { line ->
+                                    // 匹配逻辑：判断当前段落行是否与正在复习的子概念相关
+                                    var isCurrentActiveLine = false
+                                    if ((state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK) && concept != null) {
+                                        val conceptTitle = concept.title
+                                        val conceptId = concept.id
+                                        // 若行中包含当前子概念的 Title 或 ID，则视为当前活跃段落
+                                        isCurrentActiveLine = (conceptTitle.isNotBlank() && line.contains(conceptTitle)) || line.contains(conceptId)
+                                    }
+
+                                    // 动态计算行级样式：非当前子概念行（例如在复习“行动”时，原本的“背景”、“难点”行）字号压缩至 10.sp，透明度压低至 0.18f（极淡）
+                                    // 正在复习的子概念行（如“行动”行）则维持 14.sp 并且给予 0.85f 清晰度，同时加粗显示以提示上下文定位
+                                    val lineSize = if (isCurrentActiveLine) (14 * fontScale).sp else (10 * fontScale).sp
+                                    val lineAlpha = if (isCurrentActiveLine) 0.85f else 0.18f
+                                    val lineLineHeight = if (isCurrentActiveLine) (19 * fontScale).sp else (14 * fontScale).sp
+                                    val lineWeight = if (isCurrentActiveLine) FontWeight.Medium else FontWeight.Normal
+
+                                    Text(
+                                        text = parseConceptLinks(line, defaultColor, conceptColorMap),
+                                        fontSize = lineSize,
+                                        fontWeight = lineWeight,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = lineLineHeight,
+                                        modifier = Modifier.alpha(lineAlpha)
+                                    )
                                 }
-                                val prefixIdx = if (isCurrLabel) idx - 1 else idx - 2
-                                if (prefixIdx >= 0 && prefixIdx < revealSteps.size) {
-                                    revealSteps[prefixIdx]
+                            }
+                        } else {
+                            // 【常规复习】当没有子概念激活时，100% 保持原有主卡片的常规与分段聚焦渲染，不影响普通复习
+                            val revealSteps by viewModel.revealSteps
+                            val currentSegmentStep by viewModel.currentSegmentStep
+                            val showSegmentedFocus = revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size
+
+                            if (showSegmentedFocus) {
+                                val ttsSteps by viewModel.ttsSteps
+                                val idx = currentSegmentStep
+                                val prefixText = if (ttsSteps.isNotEmpty() && idx < ttsSteps.size) {
+                                    val currentSeg = ttsSteps[idx]
+                                    val isCurrLabel = currentSeg.trim().let {
+                                        (it.startsWith("(") && it.endsWith(")")) || (it.startsWith("（") && it.endsWith("）"))
+                                    }
+                                    val prefixIdx = if (isCurrLabel) idx - 1 else idx - 2
+                                    if (prefixIdx >= 0 && prefixIdx < revealSteps.size) {
+                                        revealSteps[prefixIdx]
+                                    } else {
+                                        ""
+                                    }
                                 } else {
                                     ""
                                 }
+
+                                val fullText = revealSteps[idx]
+                                val focusedText = if (fullText.startsWith(prefixText)) {
+                                    fullText.substring(prefixText.length)
+                                } else {
+                                    fullText
+                                }
+
+                                Text(
+                                    text = parseConceptLinksWithFocus(
+                                        prefixText = prefixText,
+                                        currentText = focusedText,
+                                        defaultColor = defaultColor,
+                                        conceptColorMap = conceptColorMap,
+                                        fadedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                    ),
+                                    fontSize = (22 * fontScale).sp,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = (30 * fontScale).sp
+                                )
                             } else {
-                                ""
+                                Text(
+                                    text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
+                                    fontSize = (22 * fontScale).sp,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = (30 * fontScale).sp
+                                )
                             }
-                            
-                            val fullText = revealSteps[idx]
-                            val focusedText = if (fullText.startsWith(prefixText)) {
-                                fullText.substring(prefixText.length)
-                            } else {
-                                fullText
-                            }
-                            
-                            Text(
-                                text = parseConceptLinksWithFocus(
-                                    prefixText = prefixText,
-                                    currentText = focusedText,
-                                    defaultColor = defaultColor,
-                                    conceptColorMap = conceptColorMap,
-                                    fadedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                ),
-                                fontSize = if (isSubconceptActive) (14 * fontScale).sp else (22 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                lineHeight = if (isSubconceptActive) (20 * fontScale).sp else (30 * fontScale).sp
-                            )
-                        } else {
-                            Text(
-                                text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
-                                fontSize = if (isSubconceptActive) (14 * fontScale).sp else (22 * fontScale).sp,
-                                textAlign = TextAlign.Center,
-                                lineHeight = if (isSubconceptActive) (20 * fontScale).sp else (30 * fontScale).sp
-                            )
                         }
                     }
                 }
