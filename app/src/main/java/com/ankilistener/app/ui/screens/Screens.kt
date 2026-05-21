@@ -28,6 +28,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -127,6 +128,10 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
     val dueFollowUps by viewModel.dueFollowUpQueue
     val currentFollowUpIdx by viewModel.currentFollowUpIndex
     val followUp = viewModel.currentFollowUp
+    val isSubconceptActive = state == ReviewState.CONCEPT_FRONT || 
+                             state == ReviewState.CONCEPT_BACK || 
+                             state == ReviewState.FOLLOWUP_FRONT || 
+                             state == ReviewState.FOLLOWUP_BACK
     val context = LocalContext.current
     val recordPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -209,8 +214,11 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                 .padding(bottom = if (aiState.enabled && state == ReviewState.FRONT) 180.dp else 0.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = if (isSubconceptActive) Arrangement.Top else Arrangement.Center
         ) {
+            if (isSubconceptActive) {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             card?.let {
                 if (state == ReviewState.FRONT) {
                     Text(
@@ -220,75 +228,80 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                         lineHeight = (32 * fontScale).sp
                     )
                 } else if (state == ReviewState.BACK || state == ReviewState.CONCEPT_FRONT || state == ReviewState.CONCEPT_BACK || state == ReviewState.FOLLOWUP_FRONT || state == ReviewState.FOLLOWUP_BACK) {
-                    // Show question (smaller)
-                    Text(
-                        text = parseHtml(it.front).toAnnotatedString(),
-                        fontSize = (16 * fontScale).sp,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = (22 * fontScale).sp
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Divider(
-                        modifier = Modifier.fillMaxWidth(0.6f),
-                        thickness = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    // Show answer only (without duplicated question), with concept link highlighting
-                    val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back))
-                    val revealSteps by viewModel.revealSteps
-                    val currentSegmentStep by viewModel.currentSegmentStep
-                    
-                    val conceptColorMap = viewModel.getConceptColorMap()
-                    val defaultColor = MaterialTheme.colorScheme.primary
-                    
-                    val showSegmentedFocus = revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size
-                    if (showSegmentedFocus) {
-                        val ttsSteps by viewModel.ttsSteps
-                        val idx = currentSegmentStep
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.alpha(if (isSubconceptActive) 0.45f else 1.0f)
+                    ) {
+                        // Show question (smaller)
+                        Text(
+                            text = parseHtml(it.front).toAnnotatedString(),
+                            fontSize = if (isSubconceptActive) (12 * fontScale).sp else (16 * fontScale).sp,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = if (isSubconceptActive) (17 * fontScale).sp else (22 * fontScale).sp
+                        )
+                        Spacer(modifier = Modifier.height(if (isSubconceptActive) 10.dp else 24.dp))
+                        Divider(
+                            modifier = Modifier.fillMaxWidth(if (isSubconceptActive) 0.3f else 0.6f),
+                            thickness = 0.8.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                        Spacer(modifier = Modifier.height(if (isSubconceptActive) 10.dp else 24.dp))
+                        // Show answer only (without duplicated question), with concept link highlighting
+                        val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(it.back))
+                        val revealSteps by viewModel.revealSteps
+                        val currentSegmentStep by viewModel.currentSegmentStep
                         
-                        val prefixText = if (ttsSteps.isNotEmpty() && idx < ttsSteps.size) {
-                            val currentSeg = ttsSteps[idx]
-                            val isCurrLabel = currentSeg.trim().let { 
-                                (it.startsWith("(") && it.endsWith(")")) || (it.startsWith("（") && it.endsWith("）")) 
-                            }
-                            val prefixIdx = if (isCurrLabel) idx - 1 else idx - 2
-                            if (prefixIdx >= 0 && prefixIdx < revealSteps.size) {
-                                revealSteps[prefixIdx]
+                        val conceptColorMap = viewModel.getConceptColorMap()
+                        val defaultColor = MaterialTheme.colorScheme.primary
+                        
+                        val showSegmentedFocus = revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size
+                        if (showSegmentedFocus) {
+                            val ttsSteps by viewModel.ttsSteps
+                            val idx = currentSegmentStep
+                            
+                            val prefixText = if (ttsSteps.isNotEmpty() && idx < ttsSteps.size) {
+                                val currentSeg = ttsSteps[idx]
+                                val isCurrLabel = currentSeg.trim().let { 
+                                    (it.startsWith("(") && it.endsWith(")")) || (it.startsWith("（") && it.endsWith("）")) 
+                                }
+                                val prefixIdx = if (isCurrLabel) idx - 1 else idx - 2
+                                if (prefixIdx >= 0 && prefixIdx < revealSteps.size) {
+                                    revealSteps[prefixIdx]
+                                } else {
+                                    ""
+                                }
                             } else {
                                 ""
                             }
+                            
+                            val fullText = revealSteps[idx]
+                            val focusedText = if (fullText.startsWith(prefixText)) {
+                                fullText.substring(prefixText.length)
+                            } else {
+                                fullText
+                            }
+                            
+                            Text(
+                                text = parseConceptLinksWithFocus(
+                                    prefixText = prefixText,
+                                    currentText = focusedText,
+                                    defaultColor = defaultColor,
+                                    conceptColorMap = conceptColorMap,
+                                    fadedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                ),
+                                fontSize = if (isSubconceptActive) (14 * fontScale).sp else (22 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = if (isSubconceptActive) (20 * fontScale).sp else (30 * fontScale).sp
+                            )
                         } else {
-                            ""
+                            Text(
+                                text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
+                                fontSize = if (isSubconceptActive) (14 * fontScale).sp else (22 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = if (isSubconceptActive) (20 * fontScale).sp else (30 * fontScale).sp
+                            )
                         }
-                        
-                        val fullText = revealSteps[idx]
-                        val focusedText = if (fullText.startsWith(prefixText)) {
-                            fullText.substring(prefixText.length)
-                        } else {
-                            fullText
-                        }
-                        
-                        Text(
-                            text = parseConceptLinksWithFocus(
-                                prefixText = prefixText,
-                                currentText = focusedText,
-                                defaultColor = defaultColor,
-                                conceptColorMap = conceptColorMap,
-                                fadedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                            ),
-                            fontSize = (22 * fontScale).sp,
-                            textAlign = TextAlign.Center,
-                            lineHeight = (30 * fontScale).sp
-                        )
-                    } else {
-                        Text(
-                            text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
-                            fontSize = (22 * fontScale).sp,
-                            textAlign = TextAlign.Center,
-                            lineHeight = (30 * fontScale).sp
-                        )
                     }
                 }
             }
