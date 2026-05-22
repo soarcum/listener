@@ -303,42 +303,35 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                             val showSegmentedFocus = revealSteps.isNotEmpty() && currentSegmentStep < revealSteps.size
 
                             if (showSegmentedFocus) {
-                                val ttsSteps by viewModel.ttsSteps
                                 val idx = currentSegmentStep
-                                val prefixText = if (ttsSteps.isNotEmpty() && idx < ttsSteps.size) {
-                                    val currentSeg = ttsSteps[idx]
-                                    val isCurrLabel = currentSeg.trim().let {
-                                        (it.startsWith("(") && it.endsWith(")")) || (it.startsWith("（") && it.endsWith("）"))
-                                    }
-                                    val prefixIdx = if (isCurrLabel) idx - 1 else idx - 2
-                                    if (prefixIdx >= 0 && prefixIdx < revealSteps.size) {
-                                        revealSteps[prefixIdx]
-                                    } else {
-                                        ""
-                                    }
-                                } else {
-                                    ""
-                                }
-
                                 val fullText = revealSteps[idx]
-                                val focusedText = if (fullText.startsWith(prefixText)) {
-                                    fullText.substring(prefixText.length)
-                                } else {
-                                    fullText
+                                
+                                // 自适应分段块分割算法：将当前揭示的全部文本在括号标签（如 (背景), （行动） 等）之前切分成多个独立的块段落
+                                val blocks = splitSegmentedBlocks(fullText)
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy((8 * fontScale).dp) // 分段段落间距
+                                ) {
+                                    blocks.forEachIndexed { blockIdx, block ->
+                                        val isCurrentBlock = blockIdx == blocks.size - 1
+                                        
+                                        // 智能动态样式：非当前分段聚焦的高亮块（如“背景”、“任务”已读块）字号物理缩小至 13.sp，透明度压低至 0.25f (消噪极淡)
+                                        // 当前正在聚焦的步骤块则以正常让人惊艳的 22.sp 清晰高亮展现
+                                        val blockSize = if (isCurrentBlock) (22 * fontScale).sp else (13 * fontScale).sp
+                                        val blockAlpha = if (isCurrentBlock) 1.0f else 0.25f
+                                        val blockLineHeight = if (isCurrentBlock) (30 * fontScale).sp else (18 * fontScale).sp
+                                        val blockWeight = if (isCurrentBlock) FontWeight.Normal else FontWeight.Normal
+                                        
+                                        Text(
+                                            text = parseConceptLinks(block, defaultColor, conceptColorMap),
+                                            fontSize = blockSize,
+                                            fontWeight = blockWeight,
+                                            textAlign = TextAlign.Center,
+                                            lineHeight = blockLineHeight,
+                                            modifier = Modifier.alpha(blockAlpha)
+                                        )
+                                    }
                                 }
-
-                                Text(
-                                    text = parseConceptLinksWithFocus(
-                                        prefixText = prefixText,
-                                        currentText = focusedText,
-                                        defaultColor = defaultColor,
-                                        conceptColorMap = conceptColorMap,
-                                        fadedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                    ),
-                                    fontSize = (22 * fontScale).sp,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = (30 * fontScale).sp
-                                )
                             } else {
                                 Text(
                                     text = parseConceptLinks(answerOnly, defaultColor, conceptColorMap),
@@ -647,36 +640,57 @@ private fun SegmentedReviewOverlay(
 
                 if (answerText == null) {
                     // 提问状态 (FRONT)
-                    Text(
-                        text = parseConceptLinks(questionText, defaultColor, conceptColorMap),
-                        modifier = Modifier.fillMaxWidth(),
-                        fontSize = (16 * fontScale).sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = (22 * fontScale).sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    // 使用段落切分：先前历史上下文段落字号与透明度极致缩小，最后一段或主提问保持适当字号
+                    val blocks = splitSegmentedBlocks(questionText)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy((4 * fontScale).dp)
+                    ) {
+                        blocks.forEachIndexed { idx, block ->
+                            val isLast = idx == blocks.size - 1
+                            // 针对历史块使用极淡的小字体，当前提问块用适中字号
+                            val size = if (isLast && blocks.size > 1) (14 * fontScale).sp else if (isLast) (16 * fontScale).sp else (11 * fontScale).sp
+                            val alpha = if (isLast) 0.9f else 0.45f
+                            val lineHeight = if (isLast) (20 * fontScale).sp else (15 * fontScale).sp
+                            Text(
+                                text = parseConceptLinks(block, defaultColor, conceptColorMap),
+                                fontSize = size,
+                                textAlign = TextAlign.Center,
+                                lineHeight = lineHeight,
+                                modifier = Modifier.alpha(alpha).fillMaxWidth()
+                            )
+                        }
+                    }
                 } else {
                     // 回答与解析状态 (BACK)
-                    // 1. 已提问的问题（字号进一步缩小，降低视觉抢占）
-                    Text(
-                        text = parseConceptLinks(questionText, defaultColor, conceptColorMap),
-                        modifier = Modifier.fillMaxWidth(),
-                        fontSize = (12 * fontScale).sp,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                        lineHeight = (17 * fontScale).sp
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    // 1. 已提问的背景问题块（进行行级段落拆分与超低灰度化处理，降至 9.5.sp 且 0.18f 透明度，彻底消除视觉注意力抢占）
+                    val blocks = splitSegmentedBlocks(questionText)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy((3 * fontScale).dp)
+                    ) {
+                        blocks.forEach { block ->
+                            Text(
+                                text = parseConceptLinks(block, defaultColor, conceptColorMap),
+                                fontSize = (9.5 * fontScale).sp,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = (13.5 * fontScale).sp,
+                                modifier = Modifier.alpha(0.18f).fillMaxWidth()
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp)) // 极致压缩间距，提拉排版
 
                     // 2. 极细且窄的优雅分割线
                     Divider(
-                        modifier = Modifier.fillMaxWidth(0.4f),
-                        thickness = 0.8.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                        modifier = Modifier.fillMaxWidth(0.3f), // 更窄，更显精致
+                        thickness = 0.6.dp, // 极薄
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(6.dp)) // 空间极致提拉
 
-                    // 3. 行动/概念的答案
+                    // 3. 行动/概念的答案（聚焦于最新内容，维持震撼舒适的大字号）
                     Text(
                         text = parseConceptLinks(answerText, defaultColor, conceptColorMap),
                         modifier = Modifier.fillMaxWidth(),
@@ -729,5 +743,13 @@ private fun getFirstConceptLink(line: String): String? {
     val pattern = Regex("\\[\\[([^\\]]+)\\]\\]")
     val match = pattern.find(line)
     return match?.groupValues?.get(1)
+}
+
+/**
+ * 智能分段块分割算法：在括号标签（如 (背景), （行动） 等）之前进行 zero-width 正则断言切分，将已揭示文本精准规整为多个独立的段落块。
+ */
+private fun splitSegmentedBlocks(text: String): List<String> {
+    val pattern = Regex("(?=([(（][^)）]{1,10}[)）]))")
+    return text.split(pattern).map { it.trim() }.filter { it.isNotBlank() }
 }
 
