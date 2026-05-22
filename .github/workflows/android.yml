@@ -33,6 +33,7 @@ jobs:
         echo "VERSION=$VERSION_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload APK
+      continue-on-error: true
       uses: actions/upload-artifact@v4
       with:
         name: AnkiListener-v${{ steps.get_version.outputs.VERSION }}
