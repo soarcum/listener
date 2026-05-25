@@ -387,7 +387,9 @@ fun MainNavigation(reviewFactory: ViewModelProvider.Factory, settingsFactory: Vi
             ReviewScreen(
                 viewModel = viewModel,
                 onFinished = {
-                    navController.popBackStack()
+                    if (navController.currentDestination?.route == "review") {
+                        navController.popBackStack()
+                    }
                 }
             )
         }
