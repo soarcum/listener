@@ -396,7 +396,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     onClick = { viewModel.executeAction(com.ankilistener.app.data.GestureAction.PLAY_TTS) }
                 ) {
                     Icon(
-                        imageVector = Icons.Default.VolumeUp,
+                        imageVector = Icons.Filled.VolumeUp,
                         contentDescription = "发音",
                         tint = Color.Gray.copy(alpha = 0.5f),
                         modifier = Modifier.size(28.dp)
@@ -407,7 +407,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     onClick = { viewModel.regenerateCurrentTts() }
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = Icons.Filled.Refresh,
                         contentDescription = "重新生成",
                         tint = Color.Gray.copy(alpha = 0.5f),
                         modifier = Modifier.size(28.dp)
@@ -678,7 +678,7 @@ private fun SegmentedReviewOverlay(
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.VolumeUp,
+                            imageVector = Icons.Filled.VolumeUp,
                             contentDescription = "发音",
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                             modifier = Modifier.size(16.dp)
@@ -693,7 +693,7 @@ private fun SegmentedReviewOverlay(
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = Icons.Filled.Refresh,
                             contentDescription = "重新生成",
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                             modifier = Modifier.size(16.dp)
