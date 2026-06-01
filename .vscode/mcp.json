@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "llm-bridge": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "c:\\Users\\Administrator\\Desktop\\cool\\aistudio\\llm-bridge-mcp\\server.py"
+      ],
+      "env": {}
+    }
+  }
+}

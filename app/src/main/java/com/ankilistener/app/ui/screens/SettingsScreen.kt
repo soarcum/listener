@@ -535,9 +535,15 @@ private fun TtsSchemeListCard(
                         value = editedAddress,
                         onValueChange = { editedAddress = it },
                         label = { Text("服务器地址") },
-                        placeholder = { Text("http://172.22.64.1:3000") },
+                        placeholder = { Text("基准URL 或 包含占位符的完整URL") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "提示：支持直接粘贴阅读APP的自定义TTS链接（包含 {{speakText}} 占位符）",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(

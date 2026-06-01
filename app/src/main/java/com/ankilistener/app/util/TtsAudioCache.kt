@@ -75,15 +75,9 @@ class TtsAudioCache(context: Context) {
 
         val tempFile = File(cacheDir, "$key.tmp")
         try {
-            val encodedText = URLEncoder.encode(text, "UTF-8")
-            val requestUrl = "$baseUrl/api/reader/tts/stream" +
-                    "?text=$encodedText" +
-                    "&speed=$speed" +
-                    "&voice=$voice" +
-                    "&usePrefetch=false" +
-                    "&delay=$delay"
+            val requestUrl = buildRequestUrl(baseUrl, text, speed, voice, delay)
 
-            Log.d(TAG, "Downloading TTS audio: key=$key")
+            Log.d(TAG, "Downloading TTS audio: key=$key, url=$requestUrl")
 
             val connection = URL(requestUrl).openConnection() as HttpURLConnection
             connection.connectTimeout = 15_000
@@ -117,6 +111,47 @@ class TtsAudioCache(context: Context) {
             Log.e(TAG, "Download failed for key=$key", e)
             tempFile.delete()
             return null
+        }
+    }
+
+    private fun buildRequestUrl(
+        address: String,
+        text: String,
+        speed: String,
+        voice: String,
+        delay: String
+    ): String {
+        return if (address.contains("{{") && address.contains("}}")) {
+            var url = address
+            val encodedText = URLEncoder.encode(text, "UTF-8")
+            val encodedVoice = URLEncoder.encode(voice, "UTF-8")
+
+            // Replace text placeholders with URL-encoded text
+            url = url.replace("{{java.encodeURI(speakText)}}", encodedText)
+            url = url.replace("{{java.encodeURI(speakText, 'utf-8')}}", encodedText)
+            url = url.replace("{{java.encodeURI(speakText, \"utf-8\")}}", encodedText)
+            url = url.replace("{{speakText}}", encodedText)
+
+            // Replace speed placeholders
+            url = url.replace("{{speakSpeed}}", speed)
+
+            // Replace voice placeholders
+            url = url.replace("{{java.encodeURI(voice)}}", encodedVoice)
+            url = url.replace("{{voice}}", voice)
+
+            // Replace delay placeholders
+            url = url.replace("{{delay}}", delay)
+
+            url
+        } else {
+            val encodedText = URLEncoder.encode(text, "UTF-8")
+            val base = address.removeSuffix("/")
+            "$base/api/reader/tts/stream" +
+                    "?text=$encodedText" +
+                    "&speed=$speed" +
+                    "&voice=$voice" +
+                    "&usePrefetch=false" +
+                    "&delay=$delay"
         }
     }
 
