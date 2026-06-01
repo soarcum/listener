@@ -38,6 +38,19 @@ class TtsAudioCache(context: Context) {
         return File(cacheDir, "$key.mp3")
     }
 
+    fun deleteCache(text: String, voice: String, speed: String): Boolean {
+        val key = getCacheKey(text, voice, speed)
+        val file = getCacheFile(key)
+        return if (file.exists()) {
+            val deleted = file.delete()
+            Log.d(TAG, "Deleted TTS cache: key=$key, text=$text, success=$deleted")
+            deleted
+        } else {
+            Log.d(TAG, "TTS cache not found for key=$key, text=$text")
+            false
+        }
+    }
+
     // ---- Cache queries ----
 
     fun isCached(text: String, voice: String, speed: String): Boolean {

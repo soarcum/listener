@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -358,7 +360,9 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                 answerText = if (state == ReviewState.CONCEPT_BACK) concept.answer else null,
                 fontScale = fontScale,
                 conceptColorMap = conceptColorMap,
-                defaultColor = defaultColor
+                defaultColor = defaultColor,
+                onSpeakClick = { viewModel.executeAction(com.ankilistener.app.data.GestureAction.PLAY_TTS) },
+                onRegenerateClick = { viewModel.regenerateCurrentTts() }
             )
         }
 
@@ -373,8 +377,43 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                 answerText = if (state == ReviewState.FOLLOWUP_BACK) followUp.answer else null,
                 fontScale = fontScale,
                 conceptColorMap = conceptColorMap,
-                defaultColor = defaultColor
+                defaultColor = defaultColor,
+                onSpeakClick = { viewModel.executeAction(com.ankilistener.app.data.GestureAction.PLAY_TTS) },
+                onRegenerateClick = { viewModel.regenerateCurrentTts() }
             )
+        }
+
+        // TTS Control Buttons (subtle icons at top left)
+        if (state != ReviewState.LOADING && state != ReviewState.NO_CARDS && state != ReviewState.FINISHED) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { viewModel.executeAction(com.ankilistener.app.data.GestureAction.PLAY_TTS) }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VolumeUp,
+                        contentDescription = "发音",
+                        tint = Color.Gray.copy(alpha = 0.5f),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { viewModel.regenerateCurrentTts() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "重新生成",
+                        tint = Color.Gray.copy(alpha = 0.5f),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
         }
 
         // Mark Button (subtle star icon at top right)
@@ -589,7 +628,9 @@ private fun SegmentedReviewOverlay(
     answerText: String? = null,
     fontScale: Float,
     conceptColorMap: Map<String, Color>,
-    defaultColor: Color
+    defaultColor: Color,
+    onSpeakClick: () -> Unit,
+    onRegenerateClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -611,19 +652,53 @@ private fun SegmentedReviewOverlay(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 精致的胶囊状态进度徽章
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(bottom = 12.dp)
+                Row(
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = progressText,
-                        fontSize = (11 * fontScale).sp,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                    )
+                    // 精致的胶囊状态进度徽章
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = progressText,
+                            fontSize = (11 * fontScale).sp,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                        )
+                    }
+
+                    // 播音/发音按钮
+                    IconButton(
+                        onClick = onSpeakClick,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = "发音",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // 重新生成按钮
+                    IconButton(
+                        onClick = onRegenerateClick,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "重新生成",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
                 // 子概念标题（仅在有值时显示）

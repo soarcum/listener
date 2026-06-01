@@ -53,7 +53,7 @@ object UpdateManager {
         .followSslRedirects(false)
         .build()
 
-    private const val GITHUB_TOKEN = "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"
+    private const val GITHUB_TOKEN = ""
 
     fun getCurrentVersion(context: Context): String {
         return try {
@@ -65,12 +65,15 @@ object UpdateManager {
 
     suspend fun checkForUpdate(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
+            val requestBuilder = Request.Builder()
                 .url(GITHUB_API)
                 .addHeader("Accept", "application/vnd.github.v3+json")
                 .addHeader("User-Agent", "AnkiListener")
-                .addHeader("Authorization", "Bearer $GITHUB_TOKEN")
-                .build()
+
+            if (GITHUB_TOKEN.isNotBlank()) {
+                requestBuilder.addHeader("Authorization", "Bearer $GITHUB_TOKEN")
+            }
+            val request = requestBuilder.build()
 
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
@@ -92,9 +95,11 @@ object UpdateManager {
                         val asset = assets.getJSONObject(i)
                         val name = asset.getString("name")
                         if (name.endsWith(".apk")) {
+                            val downloadUrl = asset.optString("browser_download_url", "")
+                                .ifBlank { asset.getString("url") }
                             return@withContext UpdateInfo(
                                 version = tagName,
-                                downloadUrl = asset.getString("url"),
+                                downloadUrl = downloadUrl,
                                 body = releaseBody
                             )
                         }
@@ -144,7 +149,14 @@ object UpdateManager {
             AppLogger.i(TAG, "Download attempt $attempt/$MAX_RETRY")
             onStateChange(DownloadState.Downloading(0, 0, 0))
             try {
-                downloadApk(downloadUrl, file, onStateChange)
+                // If it is a public github.com url, we proxy through mirror.ghproxy.com for the first two attempts
+                val targetUrl = if (attempt < MAX_RETRY && downloadUrl.contains("github.com/")) {
+                    "https://mirror.ghproxy.com/$downloadUrl"
+                } else {
+                    downloadUrl
+                }
+                AppLogger.i(TAG, "Downloading from URL: $targetUrl")
+                downloadApk(targetUrl, file, onStateChange)
                 AppLogger.i(TAG, "Download complete: ${file.length()} bytes")
                 onStateChange(DownloadState.Installing(file))
                 installApk(context, file)
@@ -169,14 +181,19 @@ object UpdateManager {
         targetFile: File,
         onStateChange: (DownloadState) -> Unit
     ) {
-        val authedRequest = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(downloadUrl)
-            .addHeader("Authorization", "Bearer $GITHUB_TOKEN")
-            .addHeader("Accept", "application/octet-stream")
             .addHeader("User-Agent", "AnkiListener")
-            .build()
 
-        downloadClient.newCall(authedRequest).execute().use { firstResp ->
+        // Only add authorization token when requesting the official private API
+        if (downloadUrl.contains("api.github.com") && GITHUB_TOKEN.isNotBlank()) {
+            requestBuilder.addHeader("Authorization", "Bearer $GITHUB_TOKEN")
+            requestBuilder.addHeader("Accept", "application/octet-stream")
+        }
+
+        val request = requestBuilder.build()
+
+        downloadClient.newCall(request).execute().use { firstResp ->
             val streamResp = when (firstResp.code) {
                 301, 302, 303, 307, 308 -> {
                     val location = firstResp.header("Location")

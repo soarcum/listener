@@ -127,6 +127,17 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
+     * Delete cached audio for the given text. Only meaningful for API provider.
+     */
+    fun deleteCache(text: String): Boolean {
+        return if (provider == TtsProvider.API) {
+            apiTtsManager.deleteCache(text)
+        } else {
+            false
+        }
+    }
+
+    /**
      * Get cache stats.
      */
     fun getCacheStats(): TtsAudioCache.CacheStats {

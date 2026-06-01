@@ -122,6 +122,13 @@ class ApiTtsManager(context: Context) {
         return cache.isCached(text, voice, speakSpeed)
     }
 
+    /**
+     * Delete cached audio for the given text.
+     */
+    fun deleteCache(text: String): Boolean {
+        return cache.deleteCache(text, voice, speakSpeed)
+    }
+
     fun stop() {
         playJob?.cancel()
         playJob = null

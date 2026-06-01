@@ -743,29 +743,65 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
     // ---- Prefetch logic ----
 
+    private fun getSegmentTtsSteps(card: Card, isSegmentedEnabled: Boolean): List<String> {
+        if (!isSegmentedEnabled) return emptyList()
+        val answerOnly = HtmlUtils.extractAnswerOnlyHtml(HtmlUtils.removeAnkiListenerConceptBlocks(card.back))
+        val regex = Regex("(?m)^([(（][^)）]{1,10}[)）])")
+        val matches = regex.findAll(answerOnly).toList()
+        if (matches.size > 1 || (matches.size == 1 && matches[0].range.first == 0)) {
+            val tSteps = mutableListOf<String>()
+            if (matches.isNotEmpty() && matches[0].range.first > 0) {
+                val intro = answerOnly.substring(0, matches[0].range.first)
+                tSteps.add(intro.trim())
+            }
+            for (i in matches.indices) {
+                val match = matches[i]
+                val label = match.groupValues[1]
+                val start = match.range.last + 1
+                val end = if (i + 1 < matches.size) matches[i + 1].range.first else answerOnly.length
+                val content = answerOnly.substring(start, end)
+                
+                tSteps.add(label)
+                tSteps.add(content.trim())
+            }
+            return tSteps
+        }
+        return emptyList()
+    }
+
     private fun prefetchUpcoming() {
         viewModelScope.launch {
             val prefetchCount = settingsRepository.getPrefetchCount()
             val cards = _currentCards.value
             val currentIdx = _currentIndex.value
+            val isSegmentedEnabled = settingsRepository.getSegmentedResponseEnabled()
 
             val endIdx = (currentIdx + prefetchCount).coerceAtMost(cards.size)
             for (i in currentIdx until endIdx) {
                 val card = cards[i]
-                val frontText = HtmlUtils.extractTtsText(card.front)
-                val backText = getBackTtsText(card)
+                val frontText = HtmlUtils.extractTtsText(card.front).replace("[[", "").replace("]]", "")
                 ttsManager.prefetch(frontText)
-                ttsManager.prefetch(backText)
+
+                val segmentSteps = getSegmentTtsSteps(card, isSegmentedEnabled)
+                if (segmentSteps.isNotEmpty()) {
+                    for (seg in segmentSteps) {
+                        ttsManager.prefetch(seg.replace("[[", "").replace("]]", ""))
+                    }
+                } else {
+                    val backText = getBackTtsText(card)
+                    ttsManager.prefetch(backText)
+                }
 
                 // Prefetch concept TTS for upcoming cards
                 val now = System.currentTimeMillis()
+                val dueOnly = settingsRepository.getConceptDueOnly()
                 if (settingsRepository.getConceptReviewEnabled()) {
                     val concepts = ConceptCardParser.parse(card.back, card.id, card.ord)
                     for (concept in concepts) {
                         val key = conceptScheduleRepository.buildKey(card.id, card.ord, concept.id)
-                        if (conceptScheduleRepository.isDue(key, now)) {
-                            ttsManager.prefetch(concept.question)
-                            ttsManager.prefetch(concept.answer)
+                        if (!dueOnly || conceptScheduleRepository.isDue(key, now)) {
+                            ttsManager.prefetch(concept.question.replace("[[", "").replace("]]", ""))
+                            ttsManager.prefetch(concept.answer.replace("[[", "").replace("]]", ""))
                         }
                     }
                 }
@@ -773,9 +809,9 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                 val followUps = ConceptCardParser.parseFollowUps(card.back, card.id, card.ord)
                 for (fu in followUps) {
                     val key = conceptScheduleRepository.buildFollowUpKey(card.id, card.ord, fu.id)
-                    if (conceptScheduleRepository.isDue(key, now)) {
-                        ttsManager.prefetch(fu.question)
-                        ttsManager.prefetch(fu.answer)
+                    if (!dueOnly || conceptScheduleRepository.isDue(key, now)) {
+                        ttsManager.prefetch(fu.question.replace("[[", "").replace("]]", ""))
+                        ttsManager.prefetch(fu.answer.replace("[[", "").replace("]]", ""))
                     }
                 }
             }
@@ -789,6 +825,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         val cards = _currentCards.value
         val prefetchCount = settingsRepository.getPrefetchCount()
         val currentIdx = _currentIndex.value
+        val isSegmentedEnabled = settingsRepository.getSegmentedResponseEnabled()
 
         val endIdx = (currentIdx + prefetchCount).coerceAtMost(cards.size)
         var cachedFront = 0
@@ -796,8 +833,22 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
 
         for (i in currentIdx until endIdx) {
             val card = cards[i]
-            if (ttsManager.isCached(HtmlUtils.extractTtsText(card.front))) cachedFront++
-            if (ttsManager.isCached(getBackTtsText(card))) cachedBack++
+            val frontText = HtmlUtils.extractTtsText(card.front).replace("[[", "").replace("]]", "")
+            if (ttsManager.isCached(frontText)) cachedFront++
+
+            val segmentSteps = getSegmentTtsSteps(card, isSegmentedEnabled)
+            if (segmentSteps.isNotEmpty()) {
+                var allSegmentsCached = true
+                for (seg in segmentSteps) {
+                    if (!ttsManager.isCached(seg.replace("[[", "").replace("]]", ""))) {
+                        allSegmentsCached = false
+                        break
+                    }
+                }
+                if (allSegmentsCached) cachedBack++
+            } else {
+                if (ttsManager.isCached(getBackTtsText(card))) cachedBack++
+            }
         }
 
         _prefetchStatus.value = PrefetchStatus(
@@ -806,6 +857,112 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
             cachedBackCount = cachedBack,
             prefetchCount = prefetchCount
         )
+    }
+
+    fun getCurrentSpeakingText(): String? {
+        val card = currentCard ?: return null
+        return when (_reviewState.value) {
+            ReviewState.FRONT -> {
+                val followUpQuestion = _aiAnswerState.value.followUpQuestion
+                if (followUpQuestion.isNotBlank()) {
+                    followUpQuestion.replace("[[", "").replace("]]", "")
+                } else {
+                    HtmlUtils.extractTtsText(card.front).replace("[[", "").replace("]]", "")
+                }
+            }
+            ReviewState.BACK -> {
+                val ttsSteps = _ttsSteps.value
+                val currentSegmentStep = _currentSegmentStep.value
+                val text = if (ttsSteps.isNotEmpty() && currentSegmentStep >= 0 && currentSegmentStep < ttsSteps.size) {
+                    ttsSteps[currentSegmentStep]
+                } else {
+                    getBackTtsText(card)
+                }
+                text.replace("[[", "").replace("]]", "")
+            }
+            ReviewState.CONCEPT_FRONT -> {
+                currentConcept?.question?.replace("[[", "")?.replace("]]", "")
+            }
+            ReviewState.CONCEPT_BACK -> {
+                currentConcept?.answer?.replace("[[", "")?.replace("]]", "")
+            }
+            ReviewState.FOLLOWUP_FRONT -> {
+                currentFollowUp?.question?.replace("[[", "")?.replace("]]", "")
+            }
+            ReviewState.FOLLOWUP_BACK -> {
+                currentFollowUp?.answer?.replace("[[", "")?.replace("]]", "")
+            }
+            else -> null
+        }
+    }
+
+    fun regenerateCurrentTts() {
+        val card = currentCard ?: return
+        val text = getCurrentSpeakingText() ?: return
+        AppLogger.i(TAG, "Regenerate TTS called for text: $text")
+
+        // 1. Delete cache
+        ttsManager.deleteCache(text)
+
+        // 2. Stop player
+        ttsManager.stop()
+
+        // 3. Play again based on current state and preserve callbacks/behavior
+        when (_reviewState.value) {
+            ReviewState.FRONT -> {
+                val followUpQuestion = _aiAnswerState.value.followUpQuestion
+                if (followUpQuestion.isNotBlank()) {
+                    speakFollowUpQuestion(card, followUpQuestion)
+                } else {
+                    speakFrontQuestion(card)
+                }
+            }
+            ReviewState.BACK -> {
+                val ttsSteps = _ttsSteps.value
+                val currentSegmentStep = _currentSegmentStep.value
+                if (ttsSteps.isNotEmpty() && currentSegmentStep >= 0 && currentSegmentStep < ttsSteps.size) {
+                    ttsManager.speak(text)
+                } else {
+                    val nextIndex = _currentFlowStepIndex.value
+                    ttsManager.speak(text) {
+                        if (_reviewState.value == ReviewState.BACK && _currentFlowStepIndex.value == nextIndex) {
+                            executeNextFlowStep()
+                        }
+                    }
+                }
+            }
+            ReviewState.CONCEPT_FRONT -> {
+                val concept = currentConcept
+                if (concept != null) {
+                    _questionPlaybackFinished.value = false
+                    ttsManager.speak(text) {
+                        if (_reviewState.value == ReviewState.CONCEPT_FRONT && currentConcept?.id == concept.id) {
+                            _questionPlaybackFinished.value = true
+                        }
+                    }
+                }
+            }
+            ReviewState.CONCEPT_BACK -> {
+                ttsManager.speak(text)
+            }
+            ReviewState.FOLLOWUP_FRONT -> {
+                val followUp = currentFollowUp
+                if (followUp != null) {
+                    _questionPlaybackFinished.value = false
+                    ttsManager.speak(text) {
+                        if (_reviewState.value == ReviewState.FOLLOWUP_FRONT && currentFollowUp?.id == followUp.id) {
+                            _questionPlaybackFinished.value = true
+                        }
+                    }
+                }
+            }
+            ReviewState.FOLLOWUP_BACK -> {
+                ttsManager.speak(text)
+            }
+            else -> {}
+        }
+
+        _gestureFeedback.value = FeedbackEvent("已重新生成并播放语音")
     }
 
     // ---- AI voice answer ----
@@ -1110,10 +1267,10 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
                     }
                     ReviewState.BACK -> {
                         currentCard?.let { card ->
-                            val revealSteps = _revealSteps.value
+                            val ttsSteps = _ttsSteps.value
                             val currentSegmentStep = _currentSegmentStep.value
-                            val textToSpeak = if (revealSteps.isNotEmpty() && currentSegmentStep >= 0 && currentSegmentStep < revealSteps.size) {
-                                revealSteps[currentSegmentStep]
+                            val textToSpeak = if (ttsSteps.isNotEmpty() && currentSegmentStep >= 0 && currentSegmentStep < ttsSteps.size) {
+                                ttsSteps[currentSegmentStep]
                             } else {
                                 getBackTtsText(card)
                             }
