@@ -31,7 +31,7 @@ git push
 
 # 3. Monitor GitHub Actions Run Status
 $token = (Get-Content .github_token).Trim()
-$repo = "slowpack/listener"
+$repo = "soarcum/listener"
 $targetSha = $currentSha
 $url = "https://api.github.com/repos/$repo/actions/runs?per_page=5"
 
