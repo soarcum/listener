@@ -1238,7 +1238,7 @@ data class FeedbackEvent(val message: String, val id: Long = System.currentTimeM
         executeAction(action)
     }
 
-    private fun executeAction(action: GestureAction) {
+    fun executeAction(action: GestureAction) {
         when (action) {
             GestureAction.NONE -> { /* Do nothing */ }
             GestureAction.SHOW_ANSWER -> {
