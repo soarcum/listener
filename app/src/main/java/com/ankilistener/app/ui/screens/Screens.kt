@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -396,7 +396,7 @@ fun ReviewScreen(viewModel: ReviewViewModel, onFinished: () -> Unit) {
                     onClick = { viewModel.executeAction(com.ankilistener.app.data.GestureAction.PLAY_TTS) }
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.VolumeUp,
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                         contentDescription = "发音",
                         tint = Color.Gray.copy(alpha = 0.5f),
                         modifier = Modifier.size(28.dp)
@@ -678,7 +678,7 @@ private fun SegmentedReviewOverlay(
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.VolumeUp,
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = "发音",
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                             modifier = Modifier.size(16.dp)
