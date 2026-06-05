@@ -90,12 +90,19 @@ class TtsAudioCache(context: Context) {
             return cacheFile.absolutePath
         }
 
+        // 自动兼容将旧的 api.xiaomimimo.com 纠正为 token-plan-cn.xiaomimimo.com
+        val finalBaseUrl = if (baseUrl.contains("api.xiaomimimo.com")) {
+            baseUrl.replace("api.xiaomimimo.com", "token-plan-cn.xiaomimimo.com")
+        } else {
+            baseUrl
+        }
+
         val tempFile = File(cacheDir, "$key.tmp")
         try {
-            if (baseUrl.contains("api.xiaomimimo.com")) {
-                downloadXiaomiTts(tempFile, baseUrl, text, voice, apiKey, stylePrompt)
+            if (finalBaseUrl.contains("token-plan-cn.xiaomimimo.com")) {
+                downloadXiaomiTts(tempFile, finalBaseUrl, text, voice, apiKey, stylePrompt)
             } else {
-                val requestUrl = buildRequestUrl(baseUrl, text, speed, voice, delay)
+                val requestUrl = buildRequestUrl(finalBaseUrl, text, speed, voice, delay)
 
                 Log.d(TAG, "Downloading TTS audio: key=$key, url=$requestUrl")
 
@@ -148,19 +155,16 @@ class TtsAudioCache(context: Context) {
 
         val messagesArray = JSONArray()
 
-        // 纠正消息格式，避免最后一个角色是 assistant 导致 400 Bad Request
-        val systemContent = stylePrompt.ifBlank { "Natural and clear English speech, standard pace and friendly tone." }
-        if (systemContent.isNotEmpty()) {
-            val systemMsg = JSONObject()
-            systemMsg.put("role", "system")
-            systemMsg.put("content", systemContent)
-            messagesArray.put(systemMsg)
-        }
-
+        // 还原小米 TTS 特有的二元消息格式 (不能用 system，且最后的文本必须用 assistant 角色)
         val userMsg = JSONObject()
         userMsg.put("role", "user")
-        userMsg.put("content", text)
+        userMsg.put("content", stylePrompt.ifBlank { "Natural and clear English speech, standard pace and friendly tone." })
         messagesArray.put(userMsg)
+
+        val assistantMsg = JSONObject()
+        assistantMsg.put("role", "assistant")
+        assistantMsg.put("content", text)
+        messagesArray.put(assistantMsg)
 
         rootJson.put("messages", messagesArray)
 

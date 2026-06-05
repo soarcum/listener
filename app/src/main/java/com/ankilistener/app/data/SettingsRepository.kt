@@ -208,7 +208,7 @@ class SettingsRepository(context: Context) {
         )
         val xiaomiTts = TtsSchemeItem(
             name = "小米 TTS",
-            address = "https://api.xiaomimimo.com/v1/chat/completions",
+            address = "https://token-plan-cn.xiaomimimo.com/v1/chat/completions",
             voice = "mimo_default",
             speed = "1.0",
             delay = "0",
