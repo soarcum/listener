@@ -448,6 +448,8 @@ private fun TtsSchemeListCard(
     var editedName by remember { mutableStateOf("") }
     var editedAddress by remember { mutableStateOf("") }
     var editedKey by remember { mutableStateOf("") }
+    var editedVoice by remember { mutableStateOf("mimo_default") }
+    var editedStylePrompt by remember { mutableStateOf("") }
 
     LaunchedEffect(editingSchemeId) {
         val scheme = editingSchemeId?.let { id -> ttsSettings.schemes.find { it.id == id } }
@@ -455,10 +457,14 @@ private fun TtsSchemeListCard(
             editedName = scheme.name
             editedAddress = scheme.address
             editedKey = scheme.apiKey
+            editedVoice = scheme.voice
+            editedStylePrompt = scheme.stylePrompt
         } else if (showInput) {
             editedName = ""
             editedAddress = ""
             editedKey = ""
+            editedVoice = "mimo_default"
+            editedStylePrompt = "Natural and clear English speech, standard pace and friendly tone."
         }
     }
 
@@ -522,6 +528,36 @@ private fun TtsSchemeListCard(
                     } else {
                         Spacer(modifier = Modifier.height(8.dp))
                     }
+
+                    if (editingSchemeId == null) {
+                        Text("选择预设模版", style = MaterialTheme.typography.titleSmall)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SuggestionChip(
+                                onClick = {
+                                    editedName = "小米 TTS"
+                                    editedAddress = "https://api.xiaomimimo.com/v1/chat/completions"
+                                    editedVoice = "mimo_default"
+                                    editedStylePrompt = "Natural and clear English speech, standard pace and friendly tone."
+                                },
+                                label = { Text("小米 TTS") }
+                            )
+                            SuggestionChip(
+                                onClick = {
+                                    editedName = "默认 Legado"
+                                    editedAddress = "http://172.22.64.1:3000"
+                                    editedVoice = "zh_female_wenroutaozi_uranus_bigtts"
+                                    editedStylePrompt = ""
+                                },
+                                label = { Text("默认 Legado") }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     OutlinedTextField(
                         value = editedName,
                         onValueChange = { editedName = it },
@@ -554,6 +590,25 @@ private fun TtsSchemeListCard(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editedVoice,
+                        onValueChange = { editedVoice = it },
+                        label = { Text("音色 (voice)") },
+                        placeholder = { Text("如: mimo_default") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (editedAddress.contains("api.xiaomimimo.com")) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editedStylePrompt,
+                            onValueChange = { editedStylePrompt = it },
+                            label = { Text("音色描述 (stylePrompt)") },
+                            placeholder = { Text("如: Natural speech, clear pace.") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = {
@@ -564,7 +619,9 @@ private fun TtsSchemeListCard(
                                         ttsSettings.schemes.find { it.id == id }!!.copy(
                                             name = editedName.trim().ifBlank { "未命名" },
                                             address = editedAddress.trim(),
-                                            apiKey = editedKey.trim()
+                                            apiKey = editedKey.trim(),
+                                            voice = editedVoice.trim(),
+                                            stylePrompt = editedStylePrompt.trim()
                                         )
                                     )
                                 } else {
@@ -572,7 +629,9 @@ private fun TtsSchemeListCard(
                                         TtsSchemeItem(
                                             name = editedName.trim().ifBlank { "未命名" },
                                             address = editedAddress.trim(),
-                                            apiKey = editedKey.trim()
+                                            apiKey = editedKey.trim(),
+                                            voice = editedVoice.trim(),
+                                            stylePrompt = editedStylePrompt.trim()
                                         )
                                     )
                                 }
@@ -623,8 +682,16 @@ private fun TtsSchemeListCard(
                 placeholder = "zh_female_wenroutaozi_uranus_bigtts",
                 onValueChange = { viewModel.updateActiveSchemeVoice(it) }
             )
+            if (active.address.contains("api.xiaomimimo.com")) {
+                TtsTextField(
+                    label = "音色描述 (stylePrompt)",
+                    value = active.stylePrompt,
+                    placeholder = "如: Natural and clear English speech.",
+                    onValueChange = { viewModel.updateActiveSchemeStylePrompt(it) }
+                )
+            }
             Text(
-                "兼容阅读(legado)的TTS接口格式",
+                if (active.address.contains("api.xiaomimimo.com")) "小米 TTS 接口格式" else "兼容阅读(legado)的TTS接口格式",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp)

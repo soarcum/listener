@@ -32,6 +32,7 @@ class ApiTtsManager(context: Context) {
     var delay: String = "5"
     var voice: String = "zh_female_wenroutaozi_uranus_bigtts"
     var apiKey: String = ""
+    var stylePrompt: String = ""
 
     /**
      * Speaks the given text. Uses cached audio if available, otherwise
@@ -47,8 +48,8 @@ class ApiTtsManager(context: Context) {
         playJob = scope.launch {
             try {
                 // Try cache first, download if miss
-                val filePath = cache.getCachedFilePath(text, voice, speakSpeed)
-                    ?: cache.downloadAndCache(text, baseUrl, voice, speakSpeed, delay)
+                val filePath = cache.getCachedFilePath(text, voice, speakSpeed, stylePrompt)
+                    ?: cache.downloadAndCache(text, baseUrl, voice, speakSpeed, delay, apiKey, stylePrompt)
 
                 if (filePath == null) {
                     Log.e(TAG, "Failed to get audio for text")
@@ -102,11 +103,11 @@ class ApiTtsManager(context: Context) {
      */
     fun prefetch(text: String) {
         if (text.isBlank()) return
-        if (cache.isCached(text, voice, speakSpeed)) return
+        if (cache.isCached(text, voice, speakSpeed, stylePrompt)) return
 
         scope.launch {
             try {
-                cache.downloadAndCache(text, baseUrl, voice, speakSpeed, delay)
+                cache.downloadAndCache(text, baseUrl, voice, speakSpeed, delay, apiKey, stylePrompt)
             } catch (e: CancellationException) {
                 // expected
             } catch (e: Exception) {
@@ -119,14 +120,14 @@ class ApiTtsManager(context: Context) {
      * Check if audio for the given text is already cached.
      */
     fun isCached(text: String): Boolean {
-        return cache.isCached(text, voice, speakSpeed)
+        return cache.isCached(text, voice, speakSpeed, stylePrompt)
     }
 
     /**
      * Delete cached audio for the given text.
      */
     fun deleteCache(text: String): Boolean {
-        return cache.deleteCache(text, voice, speakSpeed)
+        return cache.deleteCache(text, voice, speakSpeed, stylePrompt)
     }
 
     fun stop() {

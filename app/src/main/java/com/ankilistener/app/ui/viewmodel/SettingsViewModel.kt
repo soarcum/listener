@@ -125,7 +125,8 @@ class SettingsViewModel(
                 speed = active.speed,
                 delay = active.delay,
                 voice = active.voice,
-                apiKey = active.apiKey
+                apiKey = active.apiKey,
+                stylePrompt = active.stylePrompt
             )
         }
     }
@@ -198,6 +199,11 @@ class SettingsViewModel(
     fun updateActiveSchemeVoice(voice: String) {
         val active = _ttsSettings.value.activeScheme ?: return
         updateScheme(active.copy(voice = voice))
+    }
+
+    fun updateActiveSchemeStylePrompt(stylePrompt: String) {
+        val active = _ttsSettings.value.activeScheme ?: return
+        updateScheme(active.copy(stylePrompt = stylePrompt))
     }
 
     fun updatePrefetchCount(count: Int) {

@@ -18,7 +18,8 @@ data class TtsSchemeItem(
     val apiKey: String = "",
     val speed: String = "1.0",
     val delay: String = "5",
-    val voice: String = "zh_female_wenroutaozi_uranus_bigtts"
+    val voice: String = "zh_female_wenroutaozi_uranus_bigtts",
+    val stylePrompt: String = ""
 )
 
 object TtsSchemeStorage {
@@ -33,6 +34,7 @@ object TtsSchemeStorage {
                 put("speed", s.speed)
                 put("delay", s.delay)
                 put("voice", s.voice)
+                put("stylePrompt", s.stylePrompt)
             }
             arr.put(obj)
         }
@@ -52,7 +54,8 @@ object TtsSchemeStorage {
                     apiKey = obj.optString("apiKey", ""),
                     speed = obj.optString("speed", "1.0"),
                     delay = obj.optString("delay", "5"),
-                    voice = obj.optString("voice", "zh_female_wenroutaozi_uranus_bigtts")
+                    voice = obj.optString("voice", "zh_female_wenroutaozi_uranus_bigtts"),
+                    stylePrompt = obj.optString("stylePrompt", "")
                 )
             }
         } catch (e: Exception) {
@@ -191,7 +194,30 @@ class SettingsRepository(context: Context) {
         val schemes = TtsSchemeStorage.fromJson(json)
         if (schemes.isNotEmpty()) return schemes
         // Migration: convert old single address to first scheme
-        return migrateOldTtsAddress()
+        val migrated = migrateOldTtsAddress()
+        if (migrated.isNotEmpty()) return migrated
+
+        // Default schemes pre-populated
+        val defaultLegado = TtsSchemeItem(
+            name = "默认 (Legado)",
+            address = DEFAULT_BASE_URL,
+            voice = "zh_female_wenroutaozi_uranus_bigtts",
+            speed = "1.0",
+            delay = "5",
+            stylePrompt = ""
+        )
+        val xiaomiTts = TtsSchemeItem(
+            name = "小米 TTS",
+            address = "https://api.xiaomimimo.com/v1/chat/completions",
+            voice = "mimo_default",
+            speed = "1.0",
+            delay = "0",
+            apiKey = "",
+            stylePrompt = "Natural and clear English speech, standard pace and friendly tone."
+        )
+        val defaults = listOf(defaultLegado, xiaomiTts)
+        setTtsSchemes(defaults)
+        return defaults
     }
 
     fun setTtsSchemes(schemes: List<TtsSchemeItem>) {
