@@ -93,11 +93,7 @@ class TtsAudioCache(context: Context) {
         val tempFile = File(cacheDir, "$key.tmp")
         try {
             if (baseUrl.contains("api.xiaomimimo.com")) {
-                val success = downloadXiaomiTts(tempFile, baseUrl, text, voice, apiKey, stylePrompt)
-                if (!success) {
-                    tempFile.delete()
-                    return null
-                }
+                downloadXiaomiTts(tempFile, baseUrl, text, voice, apiKey, stylePrompt)
             } else {
                 val requestUrl = buildRequestUrl(baseUrl, text, speed, voice, delay)
 
@@ -110,9 +106,10 @@ class TtsAudioCache(context: Context) {
 
                 val responseCode = connection.responseCode
                 if (responseCode != HttpURLConnection.HTTP_OK) {
-                    Log.e(TAG, "HTTP error: $responseCode")
+                    val errorStream = connection.errorStream
+                    val errorResponse = errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                     connection.disconnect()
-                    return null
+                    throw Exception("HTTP 错误 $responseCode: $errorResponse")
                 }
 
                 connection.inputStream.use { input ->
@@ -128,14 +125,13 @@ class TtsAudioCache(context: Context) {
                 Log.d(TAG, "Cached audio: key=$key, size=${cacheFile.length()} bytes")
                 return cacheFile.absolutePath
             } else {
-                Log.e(TAG, "Failed to rename temp file")
                 tempFile.delete()
-                return null
+                throw Exception("重命名临时文件失败")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Download failed for key=$key", e)
             tempFile.delete()
-            return null
+            throw e
         }
     }
 
@@ -146,82 +142,81 @@ class TtsAudioCache(context: Context) {
         voice: String,
         apiKey: String,
         stylePrompt: String
-    ): Boolean {
-        try {
-            val rootJson = JSONObject()
-            rootJson.put("model", "mimo-v2.5-tts")
+    ) {
+        val rootJson = JSONObject()
+        rootJson.put("model", "mimo-v2.5-tts")
 
-            val messagesArray = JSONArray()
+        val messagesArray = JSONArray()
 
-            // Message 1: User style prompt
-            val userMsg = JSONObject()
-            userMsg.put("role", "user")
-            userMsg.put("content", stylePrompt.ifBlank { "Natural and clear English speech, standard pace and friendly tone." })
-            messagesArray.put(userMsg)
+        // 纠正消息格式，避免最后一个角色是 assistant 导致 400 Bad Request
+        val systemContent = stylePrompt.ifBlank { "Natural and clear English speech, standard pace and friendly tone." }
+        if (systemContent.isNotEmpty()) {
+            val systemMsg = JSONObject()
+            systemMsg.put("role", "system")
+            systemMsg.put("content", systemContent)
+            messagesArray.put(systemMsg)
+        }
 
-            // Message 2: Assistant content (the text to synthesize)
-            val assistantMsg = JSONObject()
-            assistantMsg.put("role", "assistant")
-            assistantMsg.put("content", text)
-            messagesArray.put(assistantMsg)
+        val userMsg = JSONObject()
+        userMsg.put("role", "user")
+        userMsg.put("content", text)
+        messagesArray.put(userMsg)
 
-            rootJson.put("messages", messagesArray)
+        rootJson.put("messages", messagesArray)
 
-            // Audio configuration
-            val audioObj = JSONObject()
-            audioObj.put("format", "wav")
-            audioObj.put("voice", voice.ifBlank { "mimo_default" })
-            rootJson.put("audio", audioObj)
+        // Audio configuration
+        val audioObj = JSONObject()
+        audioObj.put("format", "wav")
+        audioObj.put("voice", voice.ifBlank { "mimo_default" })
+        rootJson.put("audio", audioObj)
 
-            val jsonPayload = rootJson.toString()
-            Log.d(TAG, "Xiaomi TTS request payload: $jsonPayload")
+        val jsonPayload = rootJson.toString()
+        Log.d(TAG, "Xiaomi TTS request payload: $jsonPayload")
 
-            val url = URL(baseUrl)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 60_000
-            connection.requestMethod = "POST"
-            connection.doOutput = true
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("api-key", apiKey)
+        val url = URL(baseUrl)
+        val connection = url.openConnection() as HttpURLConnection
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 60_000
+        connection.requestMethod = "POST"
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.setRequestProperty("api-key", apiKey)
 
-            connection.outputStream.use { os ->
-                os.write(jsonPayload.toByteArray(Charsets.UTF_8))
-                os.flush()
-            }
+        connection.outputStream.use { os ->
+            os.write(jsonPayload.toByteArray(Charsets.UTF_8))
+            os.flush()
+        }
 
-            val responseCode = connection.responseCode
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                val errorStream = connection.errorStream
-                val errorResponse = errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                Log.e(TAG, "Xiaomi TTS HTTP error: $responseCode, response: $errorResponse")
-                connection.disconnect()
-                return false
-            }
-
-            val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+        val responseCode = connection.responseCode
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            val errorStream = connection.errorStream
+            val errorResponse = errorStream?.bufferedReader()?.use { it.readText() } ?: ""
             connection.disconnect()
+            throw Exception("小米 TTS HTTP 错误 $responseCode: $errorResponse")
+        }
 
-            val respJson = JSONObject(responseText)
-            val choices = respJson.getJSONArray("choices")
-            if (choices.length() > 0) {
-                val message = choices.getJSONObject(0).getJSONObject("message")
-                val audio = message.getJSONObject("audio")
-                val base64Data = audio.getString("data")
+        val responseText = connection.inputStream.bufferedReader().use { it.readText() }
+        connection.disconnect()
 
-                // Decode base64 to tempFile
-                val audioBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
-                tempFile.outputStream().use { output ->
-                    output.write(audioBytes)
-                }
-                return true
-            } else {
-                Log.e(TAG, "Xiaomi TTS response choices is empty")
-                return false
+        val respJson = JSONObject(responseText)
+        val choices = respJson.optJSONArray("choices")
+        if (choices != null && choices.length() > 0) {
+            val message = choices.getJSONObject(0).optJSONObject("message")
+            val audio = message?.optJSONObject("audio")
+            val base64Data = audio?.optString("data") ?: ""
+            if (base64Data.isEmpty()) {
+                throw Exception("小米 TTS 响应中未找到音频数据 (choices[0].message.audio.data 为空)")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse or download Xiaomi TTS response", e)
-            return false
+
+            // Decode base64 to tempFile
+            val audioBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+            tempFile.outputStream().use { output ->
+                output.write(audioBytes)
+            }
+        } else {
+            val errorObj = respJson.optJSONObject("error")
+            val errMsg = errorObj?.optString("message") ?: "响应 Choices 为空"
+            throw Exception("小米 TTS 响应异常: $errMsg")
         }
     }
 

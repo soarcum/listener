@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.util.Log
+import android.widget.Toast
 import kotlinx.coroutines.*
 
 /**
@@ -15,7 +16,7 @@ import kotlinx.coroutines.*
  * - Prefetch support for upcoming cards
  * - Cache management (stats, clear)
  */
-class ApiTtsManager(context: Context) {
+class ApiTtsManager(private val context: Context) {
 
     companion object {
         private const val TAG = "ApiTtsManager"
@@ -52,9 +53,7 @@ class ApiTtsManager(context: Context) {
                     ?: cache.downloadAndCache(text, baseUrl, voice, speakSpeed, delay, apiKey, stylePrompt)
 
                 if (filePath == null) {
-                    Log.e(TAG, "Failed to get audio for text")
-                    onComplete?.invoke()
-                    return@launch
+                    throw Exception("获取音频文件失败")
                 }
 
                 // Play from local file on Main thread
@@ -85,6 +84,7 @@ class ApiTtsManager(context: Context) {
                         mediaPlayer = player
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to play cached audio", e)
+                        Toast.makeText(context, "播放音频失败: ${e.message}", Toast.LENGTH_LONG).show()
                         onComplete?.invoke()
                     }
                 }
@@ -92,6 +92,9 @@ class ApiTtsManager(context: Context) {
                 // Coroutine cancelled, expected behavior
             } catch (e: Exception) {
                 Log.e(TAG, "TTS speak error", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "TTS播放失败: ${e.message}", Toast.LENGTH_LONG).show()
+                }
                 onComplete?.invoke()
             }
         }
