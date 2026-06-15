@@ -599,7 +599,7 @@ private fun TtsSchemeListCard(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    if (editedAddress.contains("api.xiaomimimo.com")) {
+                    if (editedAddress.contains("xiaomimimo.com")) {
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = editedStylePrompt,
@@ -682,7 +682,7 @@ private fun TtsSchemeListCard(
                 placeholder = "zh_female_wenroutaozi_uranus_bigtts",
                 onValueChange = { viewModel.updateActiveSchemeVoice(it) }
             )
-            if (active.address.contains("api.xiaomimimo.com")) {
+            if (active.address.contains("xiaomimimo.com")) {
                 TtsTextField(
                     label = "音色描述 (stylePrompt)",
                     value = active.stylePrompt,
@@ -691,7 +691,7 @@ private fun TtsSchemeListCard(
                 )
             }
             Text(
-                if (active.address.contains("api.xiaomimimo.com")) "小米 TTS 接口格式" else "兼容阅读(legado)的TTS接口格式",
+                if (active.address.contains("xiaomimimo.com")) "小米 TTS 接口格式" else "兼容阅读(legado)的TTS接口格式",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 4.dp)

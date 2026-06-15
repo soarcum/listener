@@ -90,16 +90,26 @@ class TtsAudioCache(context: Context) {
             return cacheFile.absolutePath
         }
 
-        // 自动兼容将旧的 api.xiaomimimo.com 纠正为 token-plan-cn.xiaomimimo.com
-        val finalBaseUrl = if (baseUrl.contains("api.xiaomimimo.com")) {
-            baseUrl.replace("api.xiaomimimo.com", "token-plan-cn.xiaomimimo.com")
+        // 智能根据 API Key 类型自动适配域名（按量付费 sk- 使用 api.xiaomimimo.com，套餐包 tp- 使用 token-plan-cn.xiaomimimo.com）
+        val finalBaseUrl = if (apiKey.startsWith("sk-")) {
+            if (baseUrl.contains("token-plan-cn.xiaomimimo.com")) {
+                baseUrl.replace("token-plan-cn.xiaomimimo.com", "api.xiaomimimo.com")
+            } else {
+                baseUrl
+            }
+        } else if (apiKey.startsWith("tp-")) {
+            if (baseUrl.contains("api.xiaomimimo.com")) {
+                baseUrl.replace("api.xiaomimimo.com", "token-plan-cn.xiaomimimo.com")
+            } else {
+                baseUrl
+            }
         } else {
             baseUrl
         }
 
         val tempFile = File(cacheDir, "$key.tmp")
         try {
-            if (finalBaseUrl.contains("token-plan-cn.xiaomimimo.com")) {
+            if (finalBaseUrl.contains("xiaomimimo.com")) {
                 downloadXiaomiTts(tempFile, finalBaseUrl, text, voice, apiKey, stylePrompt)
             } else {
                 val requestUrl = buildRequestUrl(finalBaseUrl, text, speed, voice, delay)
@@ -185,6 +195,7 @@ class TtsAudioCache(context: Context) {
         connection.doOutput = true
         connection.setRequestProperty("Content-Type", "application/json")
         connection.setRequestProperty("api-key", apiKey)
+        connection.setRequestProperty("Authorization", "Bearer $apiKey")
 
         connection.outputStream.use { os ->
             os.write(jsonPayload.toByteArray(Charsets.UTF_8))
