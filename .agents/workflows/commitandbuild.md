@@ -46,7 +46,7 @@ git push
 // turbo
 ```powershell
 $token = (Get-Content .github_token).Trim()
-$repo = "slowpack/listener"
+$repo = "soarcum/listener"
 $targetSha = (Get-Content .last_commit_sha).Trim()
 $url = "https://api.github.com/repos/$repo/actions/runs?per_page=5"
 
