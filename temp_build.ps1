@@ -112,6 +112,14 @@ while ($true) {
         Write-Host "Current status: $($run.status)... Waiting 10s."
         Start-Sleep -Seconds 10
     } catch {
+        $msg = $_.Exception.Message
+        if ($msg -like "*401*" -or ($null -ne $_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 401)) {
+            Write-Host "Warning: GitHub API returned 401 Unauthorized. The token in .github_token may be invalid or expired."
+            Write-Host "Code has been pushed successfully! Please check the build progress on GitHub web UI: https://github.com/$repo/actions"
+            if (Test-Path .last_commit_sha) { Remove-Item .last_commit_sha }
+            if (Test-Path temp_build.ps1) { Remove-Item temp_build.ps1 }
+            break
+        }
         Write-Host "Error occurred: $_. Retrying in 5s..."
         Start-Sleep -Seconds 5
     }
