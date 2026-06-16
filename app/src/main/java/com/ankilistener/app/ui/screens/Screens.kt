@@ -824,7 +824,7 @@ private fun getFirstConceptLink(line: String): String? {
  * 智能分段块分割算法：在括号标签（如 (背景), （行动） 等）之前进行 zero-width 正则断言切分，将已揭示文本精准规整为多个独立的段落块。
  */
 private fun splitSegmentedBlocks(text: String): List<String> {
-    val pattern = Regex("(?=([(（][^)）]{1,10}[)）]))")
+    val pattern = Regex("(?m)(?=^([(（][^)）]{1,10}[)）]))")
     return text.split(pattern).map { it.trim() }.filter { it.isNotBlank() }
 }
 
