@@ -33,7 +33,7 @@ sealed class DownloadState {
 
 object UpdateManager {
 
-    private const val REPO = "slowpack/listener"
+    private const val REPO = "soarcum/listener"
     private const val GITHUB_API = "https://api.github.com/repos/$REPO/releases/latest"
     private const val MAX_RETRY = 3
     private const val TAG = "UpdateManager"
